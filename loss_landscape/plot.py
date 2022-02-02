@@ -33,10 +33,10 @@ if __name__ == '__main__':
         losses = data["losses"]
         acc = data["accuracies"]
 
-        X, Y = numpy.meshgrid(xcoords, ycoords)
+        X, Y = numpy.meshgrid(xcoords, ycoords, indexing = 'ij')
         Z = losses
         fig = pyplot.figure()
-        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.1, 10, 0.5))
+        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.4, 0.5, 0.01))
         pyplot.clabel(CS, inline=1, fontsize=8)
         fig.savefig(
             f"{args.result_folder}/{args.plot_prefix}_surface_2d_contour", dpi=300,
@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
         fig = pyplot.figure()
         pyplot.plot(xcoords, ycoords, linewidth=0.5, alpha=0.3)
-        pyplot.scatter(xcoords, ycoords, marker='.', c=numpy.arange(len(xcoords)))
+        pyplot.scatter(xcoords, ycoords, marker='.', c=numpy.arange(len(xcoords)), cmap='Reds')
         pyplot.colorbar()
         pyplot.tick_params('y', labelsize='x-large')
         pyplot.tick_params('x', labelsize='x-large')
@@ -73,10 +73,10 @@ if __name__ == '__main__':
         losses = data["losses"]
         acc = data["accuracies"]
 
-        X, Y = numpy.meshgrid(xcoords, ycoords)
+        X, Y = numpy.meshgrid(xcoords, ycoords, indexing = 'ij')
         Z = losses
         fig = pyplot.figure()
-        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.1, 10, 0.5))
+        CS = pyplot.contour(X, Y, Z, cmap='summer', levels=numpy.arange(0.42, 0.49, 0.01))
         pyplot.clabel(CS, inline=1, fontsize=8)
 
         data = numpy.load(f"{args.trajectory_file}")
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         ycoords = data["ycoordinates"]
         pyplot.plot(xcoords, ycoords, linewidth=0.5, alpha=0.3)
         pyplot.colorbar()
-        pyplot.scatter(xcoords, ycoords, marker='.', c=numpy.arange(len(xcoords)))
+        pyplot.scatter(xcoords, ycoords, marker='.', c=numpy.arange(len(xcoords)), cmap='Reds')
         pyplot.tick_params('y', labelsize='x-large')
         pyplot.tick_params('x', labelsize='x-large')
 
