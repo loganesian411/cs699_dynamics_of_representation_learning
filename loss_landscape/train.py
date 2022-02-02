@@ -142,43 +142,52 @@ if __name__ == "__main__":
 
     logger.debug(model)
 
-    # we can try computing principal directions from some specific training rounds only
-    total_params = count_params(model, skip_bn_bias=args.skip_bn_bias)
-    fd = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
-    # frequent direction for last 10 epoch
-    fd_last_10 = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
-    # frequent direction for last 1 epoch
-    fd_last_1 = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
-
     # use the same setup as He et al., 2015 (resnet)
     optimizer = torch.optim.SGD(model.parameters(), lr=LR, momentum=0.9, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer=optimizer, lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01)
     )
 
-    if "init" in args.save_strategy:
-        torch.save({
-                    'epoch': 0, # init
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': None, # init
-                    },
-                    f"{args.result_folder}/ckpt/init_model.pt",
-                    pickle_module=dill)
+    total_params = count_params(model, skip_bn_bias=args.skip_bn_bias)
+    if args.statefile:
+        checkpoint = torch.load(args.statefile)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        loss = checkpoint['loss']
+        fd = checkpoint['fd']
+        fd_last_1 = checkpoint['fdl1']
+        fd_last_10 = checkpoint['fdl10']
+        step = checkpoint['step']
+    else: # args.statefile
+        start_epoch = 0
+        step = 0
 
-    # TODO(loganesian): implement
-    checkpoint = torch.load(PATH)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
-    loss = checkpoint['loss']
+        # we can try computing principal directions from some specific training rounds only
+        fd = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
+        # frequent direction for last 10 epoch
+        fd_last_10 = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
+        # frequent direction for last 1 epoch
+        fd_last_1 = FrequentDirectionAccountant(k=2, l=10, n=total_params, device=args.device)
+
+        if "init" in args.save_strategy:
+            torch.save({'epoch': start_epoch, # init
+                        'step': step, # init
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': None, # init
+                        'fd': fd,
+                        'fdl1': fd_last_1,
+                        'fdl10': fd_last_10,
+                        },
+                        f"{args.result_folder}/ckpt/init_model.pt",
+                        pickle_module=dill)
 
     # training loop
     # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
     total_step = len(train_loader) * NUM_EPOCHS
-    step = 0
     direction_time = 0
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(start_epoch, NUM_EPOCHS):
         model.train()
         for i, (images, labels) in enumerate(train_loader):
             images = images.to(args.device)
@@ -221,9 +230,13 @@ if __name__ == "__main__":
         if "epoch" in args.save_strategy:
             torch.save({
                 'epoch': epoch,
+                'step': step,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'fd': fd,
                 'loss': loss,
+                'fdl1': fd_last_1,
+                'fdl10': fd_last_10,
                 },
                 f'{args.result_folder}/ckpt/{epoch + 1}_model.pt',
                 pickle_module=dill
