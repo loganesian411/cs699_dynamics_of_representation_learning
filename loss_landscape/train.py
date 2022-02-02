@@ -157,9 +157,21 @@ if __name__ == "__main__":
     )
 
     if "init" in args.save_strategy:
-        torch.save(
-            model.state_dict(), f"{args.result_folder}/ckpt/init_model.pt", pickle_module=dill
-        )
+        torch.save({
+                    'epoch': 0, # init
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': None, # init
+                    },
+                    f"{args.result_folder}/ckpt/init_model.pt",
+                    pickle_module=dill)
+
+    # TODO(loganesian): implement
+    checkpoint = torch.load(PATH)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
 
     # training loop
     # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
@@ -207,8 +219,13 @@ if __name__ == "__main__":
 
         # Save the model checkpoint
         if "epoch" in args.save_strategy:
-            torch.save(
-                model.state_dict(), f'{args.result_folder}/ckpt/{epoch + 1}_model.pt',
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                },
+                f'{args.result_folder}/ckpt/{epoch + 1}_model.pt',
                 pickle_module=dill
             )
 
