@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     logger.info(f"Loading model from {args.statefile}")
     state_dict = torch.load(args.statefile, pickle_module=dill, map_location=args.device)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict['model_state_dict'])
 
     total_params = count_params(model, skip_bn_bias=args.skip_bn_bias)
     pretrained_weights = flatten_params(
