@@ -66,13 +66,13 @@ if __name__ == '__main__':
     direction1 = torch.tensor(temp["direction1"], device="cpu").float()
     direction2 = torch.tensor(temp["direction2"], device="cpu").float()
 
-    model.load_state_dict(torch.load(state_files[-1], pickle_module=dill, map_location="cpu"))
+    model.load_state_dict(torch.load(state_files[-1], pickle_module=dill, map_location="cpu")['model_state_dict'])
     total_param = count_params(model, skip_bn_bias=args.skip_bn_bias)
     w_final = flatten_params(model, total_param, skip_bn_bias=args.skip_bn_bias)
 
     w_diff_matrix = torch.zeros(len(state_files) - 1, total_param)
     for idx, file in enumerate(state_files[:-1]):
-        model.load_state_dict(torch.load(file, pickle_module=dill, map_location="cpu"))
+        model.load_state_dict(torch.load(file, pickle_module=dill, map_location="cpu")['model_state_dict'])
         w = flatten_params(model, total_param, skip_bn_bias=args.skip_bn_bias)
 
         diff = w - w_final

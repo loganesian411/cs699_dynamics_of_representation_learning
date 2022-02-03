@@ -76,7 +76,7 @@ if __name__ == '__main__':
         # we need to load actual weights to get the magnitudes for normalization
         logger.info(f"Loading model from {args.statefile}")
         state_dict = torch.load(args.statefile, pickle_module=dill, map_location=args.device)
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict['model_state_dict'])
 
         # create "filter" normalized random direction if nothing is passed
         direction1 = create_normalized_random_direction(model, skip_bn_bias=True)
