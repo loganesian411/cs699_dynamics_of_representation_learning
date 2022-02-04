@@ -56,10 +56,11 @@ if __name__ == '__main__':
     logger.info(f"using {args.model} with {count_params(model)} parameters")
 
     state_files = [f"{args.statefile_folder}/init_model.pt"]
-    i = 1
-    while os.path.exists(f"{args.statefile_folder}/{i}_model.pt"):
-        state_files.append(f"{args.statefile_folder}/{i}_model.pt")
-        i += 1
+    all_chkpts = [fname for fname in os.listdir(args.statefile_folder) if 'init' not in fname]
+    all_chkpts = sorted(all_chkpts, key=lambda v: int(v.split('_')[0]))
+    for fname in all_chkpts:
+      state_files.append(os.path.join(args.statefile_folder, fname))
+
     logger.info(f"Found {len(state_files)} models")
 
     temp = numpy.load(args.direction_file)
