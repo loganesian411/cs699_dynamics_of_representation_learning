@@ -27,6 +27,7 @@ from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
+from utils.custom_transforms import RandomNoise
 
 # "Fixed" hyperparameters
 NUM_EPOCHS = 200
@@ -36,7 +37,9 @@ LR = 0.1
 DATA_FOLDER = "../data/"
 
 
-def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_data=True):
+def get_dataloader(batch_size, train_size=None, test_size=None,
+                   transform_train_data=True, add_noise=0,
+                   drop_pixels=0):
     """
         returns: cifar dataloader
 
@@ -45,16 +48,21 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
         train_size: How many samples to use of train dataset?
         test_size: How many samples to use from test dataset?
         transform_train_data: If we should transform (random crop/flip etc) or not
+        corrupt_data
+        add_noise: Std dev of Gaussian noise to add to the data (per sample basis)
+        drop_pixels: Percentage of pixels to randomly drop.
     """
 
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-    transform = transforms.Compose(
-        [
+    all_transforms = [
             transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
             transforms.ToTensor(), normalize
-        ]
-    ) if transform_train_data else transforms.Compose([transforms.ToTensor(), normalize])
+        ] if transform_train_data else [transforms.ToTensor(), normalize]
+
+    if add_noise: all_transforms.append(RandomNoise(add_noise))
+
+    transform = transforms.Compose(all_transforms)
 
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
@@ -111,6 +119,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--batch_size", required=False, type=int, default=128)
+    parser.add_argument("--add_noise", required=False, type=float, default=0)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
         default=["epoch", "init"]
@@ -131,7 +140,8 @@ if __name__ == "__main__":
     set_seed(args.seed)
 
     # get dataset
-    train_loader, test_loader = get_dataloader(args.batch_size)
+    train_loader, test_loader = get_dataloader(args.batch_size,
+                                               add_noise=args.add_noise)
 
     # get model
     model = get_resnet(args.model)(
