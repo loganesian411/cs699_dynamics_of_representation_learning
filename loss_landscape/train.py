@@ -27,7 +27,7 @@ from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
-from utils.custom_transforms import RandomNoise
+from utils.custom_transforms import RandomNoise, RandomDrop, ShufflePixels
 
 # "Fixed" hyperparameters
 NUM_EPOCHS = 200
@@ -39,7 +39,7 @@ DATA_FOLDER = "../data/"
 
 def get_dataloader(batch_size, train_size=None, test_size=None,
                    transform_train_data=True, add_noise=0,
-                   drop_pixels=0):
+                   drop_pixels=0, shuffle_pixels=0):
     """
         returns: cifar dataloader
 
@@ -61,6 +61,8 @@ def get_dataloader(batch_size, train_size=None, test_size=None,
         ] if transform_train_data else [transforms.ToTensor(), normalize]
 
     if add_noise: all_transforms.append(RandomNoise(add_noise))
+    if drop_pixels: all_transforms.append(RandomDrop(drop_pixels))
+    if shuffle_pixels: all_transforms.append(ShufflePixels(shuffle_pixels))
 
     transform = transforms.Compose(all_transforms)
 
@@ -120,6 +122,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--batch_size", required=False, type=int, default=128)
     parser.add_argument("--add_noise", required=False, type=float, default=0)
+    parser.add_argument("--drop_pixels", required=False, type=int, default=0)
+    parser.add_argument("--shuffle_pixels", required=False, type=int, default=0)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
         default=["epoch", "init"]
@@ -141,7 +145,9 @@ if __name__ == "__main__":
 
     # get dataset
     train_loader, test_loader = get_dataloader(args.batch_size,
-                                               add_noise=args.add_noise)
+                                               add_noise=args.add_noise,
+                                               drop_pixels=args.drop_pixels,
+                                               shuffle_pixels=args.shuffle_pixels)
 
     # get model
     model = get_resnet(args.model)(
@@ -252,6 +258,7 @@ if __name__ == "__main__":
                 pickle_module=dill
             )
 
+        # TODO(loganesian): implement early stopping based on loss for last three.
         loss, acc = get_loss_value(model, test_loader, device=args.device)
         logger.info(f'Accuracy of the model on the test images: {100 * acc}%')
         summary_writer.add_scalar("test/acc", acc, step)
