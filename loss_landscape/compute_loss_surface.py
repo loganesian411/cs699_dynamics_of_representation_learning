@@ -3,11 +3,8 @@ Here we compute loss at various points along the directions
 We compute L(w+x*d1 + y*d2) at different values of x and y and save it to surface file which will be used to plot contours
 """
 import argparse
-from functools import partial
 import logging
-import multiprocessing as mp
 import os
-import psutil
 import sys
 
 import dill
@@ -15,7 +12,6 @@ import numpy
 import torch
 from tqdm import tqdm
 
-import landscape_helpers
 from train import get_dataloader
 from utils.evaluations import get_loss_value
 from utils.nn_manipulation import count_params, flatten_params, set_weights_by_direction
@@ -28,9 +24,6 @@ if __name__ == '__main__':
     parser.add_argument("--seed", required=False, type=int, default=0)
     parser.add_argument(
         "--device", required=False, default="cuda" if torch.cuda.is_available() else "cpu"
-    )
-    parser.add_argument(
-        "--num_cpus", type=int, required=False, default=psutil.cpu_count() - 2 if psutil.cpu_count() > 2 else 1
     )
     parser.add_argument("--result_folder", "-r", required=True)
     parser.add_argument("--statefile", "-s", required=False, default=None)
@@ -107,39 +100,22 @@ if __name__ == '__main__':
     xcoordinates = numpy.linspace(x_min, x_max, num=x_num)
     ycoordinates = numpy.linspace(y_min, y_max, num=y_num)
 
-    pool = mp.Pool(processes=args.num_cpus, maxtasksperchild=None)
-    compute_direction_loss_partial = partial(landscape_helpers.compute_direction_loss, model,
-                                             pretrained_weights, train_loader,
-                                             direction1, direction2,
-                                             args.device, args.skip_bn_bias)
-    starmap_configs = [(x, ycoordinates) for x in xcoordinates]
-    # import ipdb; ipdb.set_trace()
-    print('Starting loss surface computation.')
-    all_y_loss_accuracy = pool.starmap_async(compute_direction_loss_partial, starmap_configs,
-                                             chunksize=1).get()
-    pool.close(); pool.terminate(); pool.join()
+    losses = numpy.zeros((x_num, y_num))
+    accuracies = numpy.zeros((x_num, y_num))
 
-    import ipdb; ipdb.set_trace()
-    losses, accuracies = zip(*all_y_loss_accuracy)
-    losses = np.hstack(losses)
-    accuracies = np.hstack(accuracies)
-
-    # losses = numpy.zeros((x_num, y_num))
-    # accuracies = numpy.zeros((x_num, y_num))
-
-    # with tqdm(total=x_num * y_num) as pbar:
-    #     for idx_x, x in enumerate(xcoordinates):
-    #         for idx_y, y in enumerate(ycoordinates):
-    #             # import ipdb;ipdb.set_trace()
-    #             set_weights_by_direction(
-    #                 model, x, y, direction1, direction2, pretrained_weights,
-    #                 skip_bn_bias=args.skip_bn_bias
-    #             )
-    #             losses[idx_x, idx_y], accuracies[idx_x, idx_y] = get_loss_value(
-    #                 model, train_loader, args.device
-    #             )
-    #             pbar.set_description(f"x:{x: .4f}, y:{y: .4f}, loss:{losses[idx_x, idx_y]:.4f}")
-    #             pbar.update(1)
+    with tqdm(total=x_num * y_num) as pbar:
+        for idx_x, x in enumerate(xcoordinates):
+            for idx_y, y in enumerate(ycoordinates):
+                # import ipdb;ipdb.set_trace()
+                set_weights_by_direction(
+                    model, x, y, direction1, direction2, pretrained_weights,
+                    skip_bn_bias=args.skip_bn_bias
+                )
+                losses[idx_x, idx_y], accuracies[idx_x, idx_y] = get_loss_value(
+                    model, train_loader, args.device
+                )
+                pbar.set_description(f"x:{x: .4f}, y:{y: .4f}, loss:{losses[idx_x, idx_y]:.4f}")
+                pbar.update(1)
 
     # save losses and accuracies evaluations
     logger.info("Saving results")
