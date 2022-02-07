@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--batch_size", required=False, type=int, default=128)
     parser.add_argument("--add_noise", required=False, type=float, default=0)
-    parser.add_argument("--drop_pixels", required=False, type=int, default=0)
+    parser.add_argument("--drop_pixels", required=False, type=float, default=0)
     parser.add_argument("--shuffle_pixels", required=False, type=int, default=0)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
