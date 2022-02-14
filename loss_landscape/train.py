@@ -39,7 +39,8 @@ DATA_FOLDER = "../data/"
 
 def get_dataloader(batch_size, train_size=None, test_size=None,
                    transform_train_data=True, add_noise=0,
-                   drop_pixels=0, shuffle_pixels=0):
+                   drop_pixels=0, shuffle_pixels=0,
+                   data_folder=DATA_FOLDER):
     """
         returns: cifar dataloader
 
@@ -70,11 +71,11 @@ def get_dataloader(batch_size, train_size=None, test_size=None,
 
     # CIFAR-10 dataset
     train_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=True, transform=transform, download=True
+        root=data_folder, train=True, transform=transform, download=True
     )
 
     test_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=False, transform=test_transform, download=True
+        root=data_folder, train=False, transform=test_transform, download=True
     )
 
     if train_size:
