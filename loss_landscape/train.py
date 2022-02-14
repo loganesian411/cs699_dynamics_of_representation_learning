@@ -161,10 +161,6 @@ if __name__ == "__main__":
 
     # use the same setup as He et al., 2015 (resnet)
     optimizer = torch.optim.SGD(model.parameters(), lr=LR, momentum=0.9, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer=optimizer, lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01)
-    )
-
     total_params = count_params(model, skip_bn_bias=args.skip_bn_bias)
     if args.statefile:
         checkpoint = torch.load(args.statefile)
@@ -199,6 +195,11 @@ if __name__ == "__main__":
                         },
                         f"{args.result_folder}/ckpt/init_model.pt",
                         pickle_module=dill)
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer=optimizer, last_epoch=start_epoch-1,
+        lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01),
+    )
 
     # training loop
     # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
