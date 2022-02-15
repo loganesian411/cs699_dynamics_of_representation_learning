@@ -41,25 +41,56 @@ class SGLD(TorchOptimizer):
 			  parameter.data.add_(noise)
 
 class LangevinDynamics():
-	def __init__(self, x, energy_func, lr=1e-2, lr_final=1e-4, max_iter=1e3,
-							 device='cpu', lr_scheduler=None):
-		self.optim = SGLD(params, lr=lr)
+	def __init__(self, model, loss_func, lr=1e-2, lr_final=1e-4, max_iter=int(1e3),
+							 num_burn_in_steps=300, device='cpu', lr_scheduler=None):
+		# TODO(loganesian): need to dynamically compute the number of steps after which to start
+		# sampling posterior.
 
+		self.lr = lr
+		self.lr_final = lr_final
+		self.max_iter = max_iter
+
+		self.optim = SGLD(model.parameters(), lr=lr)
 		self.lr_scheduler = lr_scheduler
 		if self.lr_scheduler is None:
-			self.lr_scheduler = self.decay_fn(lr_init, lr_final, max_iter)
+			self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer=self.optim,
+        lr_lambda=_decay_func(lr_init, lr_final, max_iter),
+	    )
+
+		self.loss_func = loss_func
+		self.num_burn_in_steps = num_burn_in_steps
+		self.posterior_samples = [] * (max_iter - num_burn_in_steps) # initialize
+
+		self.model = model
 
 	def _decay_func(self, lr_init, lr_final, max_iter):
-		pass
+		def lr_lambda(epoch):
+			return a * ((b + epoch) ** gamma)
+		return lr_lambda
 
-	def _sample_posterior(self):
-		pass
+	def _sample_posterior(self, epoch):
+		return epoch >= self.num_burn_in_steps
 
-	def posterior_samples(self):
-		pass
+	def sample(self, epoch, batch_data, batch_labels):
+		self.model.train()
 
-	def sample(self, epoch):
-		self.
+		outputs = self.model(batch_data)
+		logLL = torch.nn.functional.cross_entropy(output, batch_labels)
+
+		self.optim.zero_grad()
+		logLL.backward()
+		self.optim.step()
+
+		if self._sample_posterior():
+			self.posterior_samples[epoch - self.num_burn_in_steps] = model.state_dict()
+
+	def state_dict(self):
+		return self.__dict__
+
+	def load_state_dict(self, state_dict):
+		for k, v in state_dict.items():
+			setattr(self, k, v)
 
 	### scheduler nees to step at the end of the epoch not during batches
 
