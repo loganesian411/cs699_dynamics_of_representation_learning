@@ -40,20 +40,8 @@ class SGLD(TorchOptimizer):
 			  noise = torch.randn_like(parameter.data) * noise_std
 			  parameter.data.add_(noise)
 
-	# def load_state_dict():
-	# 	pass
-
-	# def state_dict():
-	# 	pass
-
-	# def zero_grad():
-	# 	pass
-
-	# def add_param_group():
-	# 	pass
-
 class LangevinDynamics():
-	def __init__(self, x, loss_func, lr=1e-2, lr_final=1e-4, max_iter=1e3,
+	def __init__(self, x, energy_func, lr=1e-2, lr_final=1e-4, max_iter=1e3,
 							 device='cpu', lr_scheduler=None):
 		self.optim = SGLD(params, lr=lr)
 
@@ -69,6 +57,9 @@ class LangevinDynamics():
 
 	def posterior_samples(self):
 		pass
+
+	def sample(self, epoch):
+		self.
 
 	### scheduler nees to step at the end of the epoch not during batches
 
