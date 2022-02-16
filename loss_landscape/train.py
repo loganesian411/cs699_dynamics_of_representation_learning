@@ -27,6 +27,7 @@ from utils.linear_algebra import FrequentDirectionAccountant
 from utils.nn_manipulation import count_params, flatten_grads
 from utils.reproducibility import set_seed
 from utils.resnet import get_resnet
+from utils.custom_transforms import RandomNoise, RandomDrop, ShufflePixels
 
 # "Fixed" hyperparameters
 NUM_EPOCHS = 200
@@ -36,7 +37,10 @@ LR = 0.1
 DATA_FOLDER = "../data/"
 
 
-def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_data=True):
+def get_dataloader(batch_size, train_size=None, test_size=None,
+                   transform_train_data=True, add_noise=0,
+                   drop_pixels=0, shuffle_pixels=0,
+                   data_folder=DATA_FOLDER):
     """
         returns: cifar dataloader
 
@@ -45,26 +49,33 @@ def get_dataloader(batch_size, train_size=None, test_size=None, transform_train_
         train_size: How many samples to use of train dataset?
         test_size: How many samples to use from test dataset?
         transform_train_data: If we should transform (random crop/flip etc) or not
+        corrupt_data
+        add_noise: Std dev of Gaussian noise to add to the data (per sample basis)
+        drop_pixels: Percentage of pixels to randomly drop.
     """
 
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-    transform = transforms.Compose(
-        [
+    all_transforms = [
             transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
             transforms.ToTensor(), normalize
-        ]
-    ) if transform_train_data else transforms.Compose([transforms.ToTensor(), normalize])
+        ] if transform_train_data else [transforms.ToTensor(), normalize]
+
+    if add_noise: all_transforms.append(RandomNoise(add_noise))
+    if drop_pixels: all_transforms.append(RandomDrop(drop_pixels))
+    if shuffle_pixels: all_transforms.append(ShufflePixels(shuffle_pixels))
+
+    transform = transforms.Compose(all_transforms)
 
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
     # CIFAR-10 dataset
     train_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=True, transform=transform, download=True
+        root=data_folder, train=True, transform=transform, download=True
     )
 
     test_dataset = torchvision.datasets.CIFAR10(
-        root=DATA_FOLDER, train=False, transform=test_transform, download=True
+        root=data_folder, train=False, transform=test_transform, download=True
     )
 
     if train_size:
@@ -111,6 +122,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--batch_size", required=False, type=int, default=128)
+    parser.add_argument("--add_noise", required=False, type=float, default=0)
+    parser.add_argument("--drop_pixels", required=False, type=float, default=0)
+    parser.add_argument("--shuffle_pixels", required=False, type=int, default=0)
     parser.add_argument(
         "--save_strategy", required=False, nargs="+", choices=["epoch", "init"],
         default=["epoch", "init"]
@@ -131,7 +145,10 @@ if __name__ == "__main__":
     set_seed(args.seed)
 
     # get dataset
-    train_loader, test_loader = get_dataloader(args.batch_size)
+    train_loader, test_loader = get_dataloader(args.batch_size,
+                                               add_noise=args.add_noise,
+                                               drop_pixels=args.drop_pixels,
+                                               shuffle_pixels=args.shuffle_pixels)
 
     # get model
     model = get_resnet(args.model)(
@@ -144,10 +161,6 @@ if __name__ == "__main__":
 
     # use the same setup as He et al., 2015 (resnet)
     optimizer = torch.optim.SGD(model.parameters(), lr=LR, momentum=0.9, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer=optimizer, lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01)
-    )
-
     total_params = count_params(model, skip_bn_bias=args.skip_bn_bias)
     if args.statefile:
         checkpoint = torch.load(args.statefile)
@@ -182,6 +195,11 @@ if __name__ == "__main__":
                         },
                         f"{args.result_folder}/ckpt/init_model.pt",
                         pickle_module=dill)
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer=optimizer, last_epoch=start_epoch-1,
+        lr_lambda=lambda x: 1 if x < 100 else (0.1 if x < 150 else 0.01),
+    )
 
     # training loop
     # we pass flattened gradients to the FrequentDirectionAccountant before clearing the grad buffer
@@ -242,6 +260,7 @@ if __name__ == "__main__":
                 pickle_module=dill
             )
 
+        # TODO(loganesian): implement early stopping based on loss for last three.
         loss, acc = get_loss_value(model, test_loader, device=args.device)
         logger.info(f'Accuracy of the model on the test images: {100 * acc}%')
         summary_writer.add_scalar("test/acc", acc, step)
