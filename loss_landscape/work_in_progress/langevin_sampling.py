@@ -79,9 +79,8 @@ if __name__ == "__main__":
 	                                               shuffle_pixels=args.shuffle_pixels)
 
     
-    optimizer = sgld.SGLD(params, lr=1e-2,
-													preconditioner=None,
-													precondition_decay_rate=None)
+    optimizer = sgld.SGLD(params, lr=1e-2, preconditioner=None,
+                          precondition_decay_rate=None)
 
     # get model
 
