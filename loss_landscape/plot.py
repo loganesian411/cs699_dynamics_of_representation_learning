@@ -38,7 +38,7 @@ if __name__ == '__main__':
         losses = data["losses"]
         acc = data["accuracies"]
 
-        X, Y = numpy.meshgrid(xcoords, ycoords, indexing = 'ij')
+        X, Y = numpy.meshgrid(xcoords, ycoords, indexing="ij")
         Z = losses
 
         if args.num_contour_levels:
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         losses = data["losses"]
         acc = data["accuracies"]
 
-        X, Y = numpy.meshgrid(xcoords, ycoords, indexing = 'ij')
+        X, Y = numpy.meshgrid(xcoords, ycoords, indexing="ij")
         Z = losses
         fig = pyplot.figure()
         CS = pyplot.contour(X, Y, Z, cmap='summer', levels=contour_levels)
