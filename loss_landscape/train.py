@@ -35,7 +35,7 @@ NUM_EPOCHS = 200
 # We use 100-50-50 schedule here.
 LR = 0.1
 DATA_FOLDER = "../data/"
-
+MISLABEL_FRACTION = 0.0
 
 def get_dataloader(batch_size, train_size=None, test_size=None,
                    transform_train_data=True, add_noise=0,
@@ -211,6 +211,11 @@ if __name__ == "__main__":
             images = images.to(args.device)
             labels = labels.to(args.device)
 
+            num_shuffle = round(len(labels) * MISLABEL_FRACTION)
+            noisy_idx = torch.randint(0,len(labels),(num_shuffle,))
+            shuffled_noisy_idx = numpy.random.permutation(noisy_idx)
+            labels[noisy_idx] = labels[shuffled_noisy_idx]
+            
             # Forward pass
             outputs = model(images)
             loss = torch.nn.functional.cross_entropy(outputs, labels)
