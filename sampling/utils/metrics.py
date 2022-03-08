@@ -53,5 +53,5 @@ def get_discretized_tv_for_image_density(density, samples, bin_size: Union[int, 
 
     sample_density = sample_density / sample_density.sum()
     density = density / density.sum()
-    breakpoint()
+    # breakpoint()
     return (numpy.abs(density - sample_density)).sum()
