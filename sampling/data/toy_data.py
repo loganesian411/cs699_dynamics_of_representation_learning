@@ -28,6 +28,7 @@ def plot_target(probs):
   plt.imshow(probs, interpolation='bilinear', origin='lower')
   plt.xticks(np.arange(probs.shape[1])-0.5, labels=np.arange(probs.shape[1]))
   plt.yticks(np.arange(probs.shape[0])-0.5, labels=np.arange(probs.shape[0]))
+  plt.axis('off')
   plt.box(False)
   return fig
 
