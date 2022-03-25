@@ -1,3 +1,6 @@
 [submodule "sampling/NPEET"]
 	path = sampling/NPEET
 	url = https://github.com/gregversteeg/NPEET.git
+[submodule "sampling/LSD"]
+	path = sampling/LSD
+	url = https://github.com/wgrathwohl/LSD
