@@ -6,20 +6,26 @@ import hamiltonian_mcmc.hamiltonian_mcmc as hmc
 import jax
 import matplotlib.image as plt_im
 import matplotlib.pyplot as plt
+import NPEET.npeet.entropy_estimators
 import numpy as np
 import os
-
-import NPEET.npeet.entropy_estimators
-from utils.metrics import get_discretized_tv_for_image_density
 from utils.density import continuous_energy_from_image, prepare_image, sample_from_image_density
+import utils.lsd_wrapper as lsd_wrapper
+from utils.metrics import get_discretized_tv_for_image_density
+from tqdm import tqdm
 
 _SNAPSHOT_FREQUENCY = 1
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--result_folder', type=str, default='results')
-  # parser.add_argument('--density', type=str, default="results")
-  parser.add_argument('--sampling_method', type=str, default='hmc') # TODO(loganesian): incorporate
+  parser.add_argument('--data', type=str,
+                      choices=['moons', 'checkerboard', 'rings', 'labrador',
+                              'chelsea', 'mixture_of_2gaussians'],
+                     default='labrador')
+  parser.add_argument('--algorithm', type=str,
+                      choices=['hmc', 'lsd'],
+                      default='hmc')
   parser.add_argument('--num_samples', type=int, default=100000)
   parser.add_argument('--K', type=int, default=100)
   parser.add_argument('--eps', type=float, default=0.1)
@@ -105,7 +111,8 @@ if __name__ == '__main__':
   
   # Metrics: KL divergence, total variation, stein discrepancy (TODO).
   metrics = defaultdict(list)
-  for i in range(args.num_iter):
+  for i in tqdm(range(args.num_iter)):
+  # for i in range(args.num_iter):
     subkey, key = jax.random.split(key)
     X, _ = hmc.hamiltonian_mcmc(X, energy_fn, args.K, eps=args.eps, key=subkey,
                                 hamilton_ode=hmc.symplectic_integration)
@@ -131,7 +138,7 @@ if __name__ == '__main__':
   hyperparameters = {'ODE_solver': hmc.symplectic_integration, 'K': args.K, 'num_iter': args.num_iter,
                      'eps': args.eps, 'initialization': args.density_initialization}
   training_results = {'final_samples': X, 'density': density, 'energy': energy}
-  np.savez(f"{args.result_folder}/final_res.npy",
+  np.savez(f'{args.result_folder}/final_res.npy',
     method_name=args.sampling_method, hyperparameter=hyperparameters,
     metrics=metrics, training_results=training_results)
 
@@ -141,7 +148,7 @@ if __name__ == '__main__':
     ax.scatter(np.array(X)[:, 1], np.array(X)[:, 0], s=0.5, alpha=0.5)
     ax.imshow(density, alpha=0.3)
     ax.set_title('Final samples distribution')
-    fig.savefig(f"{args.result_folder}/snapshot_ims/samples_final.png")
+    fig.savefig(f'{args.result_folder}/snapshot_ims/samples_final.png')
     plt.close()
 
   ## TODO(loganesian): What if we treated samples as a density to sample from

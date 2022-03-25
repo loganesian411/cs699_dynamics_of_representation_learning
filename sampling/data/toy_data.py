@@ -15,6 +15,8 @@ Source code: https://github.com/necludov/continuous-gibbs/blob/main/notebooks/2d
 Associated Paper: Kirill Neklyudov, Roberto Bondesan, Max Welling. "Deterministic
     Gibbs Sampling via Ordinary Differential Equations." arXiv (2021).
 """
+import jax
+import matplotlib.image as plt_im
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
@@ -22,18 +24,17 @@ import sklearn.datasets
 import skimage
 import os
 
-def plot_target(probs):
-  """Taken from necludov's repository and modified slightly."""
-  fig = plt.figure()
-  plt.imshow(probs, interpolation='bilinear', origin='lower')
-  plt.xticks(np.arange(probs.shape[1])-0.5, labels=np.arange(probs.shape[1]))
-  plt.yticks(np.arange(probs.shape[0])-0.5, labels=np.arange(probs.shape[0]))
-  plt.axis('off')
-  plt.box(False)
-  return fig
+def convert_image_to_array(fig):
+  """Routine to convert figure object to an array."""
+  # https://stackoverflow.com/questions/7821518/matplotlib-save-plot-to-numpy-array
+  data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+  # 1 minus to invert --> rings are high density regions???
+  # data = skimage.color.rgb2gray(data) # convert to grayscale
+  return jax.numpy.asarray(data)
 
 # TODO(loganesian): num_samples should eventually be removed.
-def generate_density(data, num_samples=100, rng=None, nx=10, ny=12):
+def generate_density(data, num_samples=100000, nx=10, ny=12):
   """Generates an image to use as a toy density.
 
   Args:
@@ -44,10 +45,7 @@ def generate_density(data, num_samples=100, rng=None, nx=10, ny=12):
   Returns:
 
   """
-  if rng is None:
-    rng = np.random.RandomState()
-
-  dirout = os.getcwd()
+  dirout = os.path.dirname(__file__)
 
   if data == 'rings':
     center = (0.0, 0.0)
@@ -62,21 +60,24 @@ def generate_density(data, num_samples=100, rng=None, nx=10, ny=12):
     plt.axis('off')
     plt.box(False)
     fig.set_size_inches(5, 5)
-    fig.savefig(os.path.join(dirout, 'rings.png'), dpi=100) # bbox_inches='tight')
-
-    # https://stackoverflow.com/questions/7821518/matplotlib-save-plot-to-numpy-array
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    # 1 minus to invert --> rings are high density regions
-    data = 1 - skimage.color.rgb2gray(data)
-    return data
+    # Have to save image in order to convert to an array afterwards.
+    fig.savefig(os.path.join(dirout, 'rings.png'), dpi=100)
+    return convert_image_to_array(fig)
 
   elif data == 'moons':
-    # TODO(loganesian): Convert this to a continuous image that we can sample.
-    data = sklearn.datasets.make_moons(n_samples=num_samples, noise=0.1)[0]
-    data = data.astype("float32")
-    data = data * 2 + np.array([-1, -0.2])
-    return data
+    data, labels = sklearn.datasets.make_moons(n_samples=num_samples, noise=0.1)
+    data = jax.numpy.asarray(data.astype('float32'))
+    data = data * 2 + jax.numpy.array([-1, -0.2])
+    
+    fig = plt.figure()
+    colors = np.array(['#377eb8', "#ff7f00"]) # blue and orange
+    # Making the markers super large so the image is sort of continuous & smooth.
+    plt.scatter(data[:, 0], data[:, 1], s=20, color=colors[labels])
+    plt.axis('off')
+    plt.box(False)
+    # Have to save image in order to convert to an array afterwards.
+    fig.savefig(os.path.join(dirout, 'moons.png'), dpi=100)
+    return convert_image_to_array(fig)
 
   elif data == 'chelsea':
     data = skimage.data.chelsea()
@@ -84,8 +85,9 @@ def generate_density(data, num_samples=100, rng=None, nx=10, ny=12):
     plt.imshow(data, cmap=plt.cm.gray)
     plt.axis('off')
     plt.box(False)
-    fig.savefig(os.path.join(dirout, 'chelsea.png'), bbox_inches='tight')
-    return data
+    # Have to save image in order to convert to an array afterwards.
+    fig.savefig(os.path.join(dirout, 'chelsea.png'), dpi=100)
+    return convert_image_to_array(fig)
 
   elif data == 'checkerboard':
     data = skimage.data.checkerboard()
@@ -93,26 +95,45 @@ def generate_density(data, num_samples=100, rng=None, nx=10, ny=12):
     plt.imshow(data, cmap=plt.cm.gray)
     plt.axis('off')
     plt.box(False)
-    fig.savefig(os.path.join(dirout, 'checkerboard.png'), bbox_inches='tight')
-    return data
+    # Have to save image in order to convert to an array afterwards.
+    fig.savefig(os.path.join(dirout, 'checkerboard.png'), dpi=100)
+    return convert_image_to_array(fig)
+
+  elif data == 'labrador':
+    return plt_im.imread(os.path.join(dirout, 'labrador.jpg'))
 
   elif data == 'mixture_of_2gaussians':
-    # TODO(loganesian): debug thiiiiiiis; would be better to save out image like
-    # rings to use and to also make the covariance adjustable???
-    x, y = np.arange(nx), np.arange(ny)
-    x_grid, y_grid = np.meshgrid(x, y)
-    stacked_grid = np.stack([x_grid, y_grid], axis=2)
-    probs = 0.5 * scipy.stats.multivariate_normal.pdf(stacked_grid,
-                                                      mean=[nx/5, ny/1.4],
-                                                      cov=[[1., 0.7], [0.7, 1.]]) +\
-            0.5 * scipy.stats.multivariate_normal.pdf(stacked_grid,
-                                                      mean=[nx/1.4, ny/5],
-                                                      cov=[[1., 0.7], [0.7, 1.]])
-    probs /= np.sum(probs)
+    def plot_target(probs):
+      """Taken from necludov's repository and modified slightly."""
+      fig = plt.figure()
+      plt.imshow(probs, interpolation='bilinear', origin='lower')
+      plt.xticks(np.arange(probs.shape[1])-0.5, labels=np.arange(probs.shape[1]))
+      plt.yticks(np.arange(probs.shape[0])-0.5, labels=np.arange(probs.shape[0]))
+      plt.axis('off')
+      plt.box(False)
+      return fig
+
+    # TODO(loganesian): make the covariance adjustable???
+    x, y = jax.numpy.arange(nx), jax.numpy.arange(ny)
+    x_grid, y_grid = jax.numpy.meshgrid(x, y)
+    stacked_grid = jax.numpy.stack([x_grid, y_grid], axis=2)
+    probs = 0.5 * jax.scipy.stats.multivariate_normal.pdf(
+                    stacked_grid,
+                    # mean and cov
+                    jax.numpy.array([nx/5, ny/1.4]),
+                    jax.numpy.array([[1., 0.7], [0.7, 1.]])
+                  ) +\
+            0.5 * jax.scipy.stats.multivariate_normal.pdf(
+                    stacked_grid,
+                    # mean and cov
+                    jax.numpy.array([nx/1.4, ny/5]),
+                    jax.numpy.array([[1., 0.7], [0.7, 1.]])
+                  )
+    # probs /= jax.numpy.sum(probs) # our utils normalize by default?
     fig = plot_target(probs)
-    fig.savefig(os.path.join(dirout, 'mixture_of_2gaussians.png'),
-                bbox_inches='tight')
-    return probs
+    # Have to save image in order to convert to an array afterwards.
+    fig.savefig(os.path.join(dirout, 'mixture_of_2gaussians.png')) #, dpi=100)
+    return convert_image_to_array(fig)
 
   # Default
-  return generate_density('mixture_of_2gaussians', num_samples, rng, nx, ny)
+  return generate_density('mixture_of_2gaussians', num_samples, nx, ny)
