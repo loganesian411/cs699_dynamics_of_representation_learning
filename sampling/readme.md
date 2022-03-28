@@ -16,3 +16,6 @@ Using any other approach for this is also fine.
 See `main.py` for suggestive use and homework document for more information. 
 
 Note: The code should be executable with sampling as the root folder. 
+
+## Note about using LSD
+The git submodule requires some local changes in order to be used. After initializing and updating your local version of the git submodule off of the master LSD repo, please copy utils/lsd_toy.py to LSD/.
