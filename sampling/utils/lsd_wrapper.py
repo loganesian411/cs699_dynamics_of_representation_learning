@@ -9,6 +9,7 @@ import LSD.lsd_toy as lsd_core
 import LSD.networks as networks
 import LSD.utils as LSD_utils
 from LSD.visualize_flow import visualize_transform
+import logging
 import matplotlib.pyplot as plt
 import NPEET.npeet.entropy_estimators
 import numpy as np
@@ -32,34 +33,60 @@ def sample_data(density, batch_size, key=jax.random.PRNGKey(0)):
 def lsd(density, energy, out_dir,
         exact_trace=True,  niters=10000, c_iters=5, # critic fn inner loops.
         lr=1e-3, weight_decay=0, critic_weight_decay=0, l2=10.,
-        batch_size=1000, density_initialization='gaussian',
-        test_nsteps=10, key=jax.random.PRNGKey(0),
+        batch_size=1000, test_nsteps=10, eps=0.3,
+        density_initialization='gaussian', precondition_HMC=False,
+        key=jax.random.PRNGKey(0), debug_mode=False,
         log_freq=100, save_freq=10000, viz_freq=100, logger=None):
+  if logger is None and debug_mode:
+    logger = LSD_utils.get_logger(logpath=os.path.join(out_dir, 'logs'),
+                                  filepath=os.path.abspath(__file__))
+
   init_batch = sample_data(density, batch_size, key=key).requires_grad_()
 
+  plt.figure(figsize=(4, 4))
+  plt.imshow(density, alpha=0.3)
+  plt.scatter(init_batch[:, 0].detach().numpy(),
+              init_batch[:, 1].detach().numpy(),
+              color='g', s=0.5, alpha=0.5)
+  fig_filename = os.path.join(out_dir, 'figs', 'starter.png')
+  LSD_utils.makedirs(os.path.dirname(fig_filename))
+  plt.savefig(fig_filename)
+
   # Define a base distribution
-  if density_initialization not in ['gaussian', 'uniform']:
+  if density_initialization not in ['gaussian', 'uniform', 'std_normal']:
     density_initialization = 'gaussian'
 
   if density_initialization == 'gaussian':
     # Fit a gaussian to the training data.  
     mu, std = init_batch.mean(0), init_batch.std(0)
     base_dist = torch.distributions.Normal(mu, std)
+  elif density_initialization == 'std_normal':
+    # Use a standard normal distribution for data. 
+    base_dist = torch.distributions.Normal(init_batch.mean(0),
+                                           torch.tensor([1.0, 1.0]))
   elif density_initialization == 'uniform':
     # Fit a uniform to the training data.
-    low, high = init_batch.min(); init_batch.max()
+    low = init_batch.min(0).values
+    high = init_batch.max(0).values
     base_dist = torch.distributions.Uniform(low, high)
 
   # Create critic and EBM neural nets.
   critic = networks.SmallMLP(2, n_out=2)
   net = networks.SmallMLP(2)
-  ebm = lsd_core.EBM(net, base_dist)
+  if density_initialization != 'uniform':
+    ebm = lsd_core.EBM(net, base_dist)
+  else:
+    ebm = lsd_core.EBM(net)
+  
   ebm.to(device)
   critic.to(device)
 
   # For sampling.
   init_fn = lambda: base_dist.sample_n(batch_size)
-  cov = LSD_utils.cov(init_batch)
+  if precondition_HMC:
+    cov = LSD_utils.cov(init_batch)
+  else:
+    cov = torch.eye(init_batch.shape[1])
 
   # I think what's going on here if we define a HMC samples that initializes
   # samples with init_fn (typically Gaussian), uses the EBM to define the
@@ -67,7 +94,7 @@ def lsd(density, energy, out_dir,
   # distributed with some sort of covariance options to precondition -- based on
   # the true data distribution (assuming based on the cov variables above). Then
   # the energy driving the sampling is potential + kinetic.
-  sampler = LSD_utils.HMCSampler(ebm, .3, 5, init_fn, device=device,
+  sampler = LSD_utils.HMCSampler(ebm, eps, 5, init_fn, device=device,
                                  covariance_matrix=cov)
 
   if logger is not None:
@@ -122,17 +149,18 @@ def lsd(density, energy, out_dir,
 
     loss_meter.update(loss.item())
     time_meter.update(time.time() - end)
-    metrics['loss'].append(loss.item())
-    metrics['l2_penalty'].append(l2_penalty.item())
-
-    key, subkey = jax.random.split(key)
-    p_samples = density_utils.sample_from_image_density(batch_size, density, subkey)
-    q_samples = sampler.sample(test_nsteps)
-    metrics['kldiv'].append(NPEET.npeet.entropy_estimators.kldiv(p_samples, q_samples))
-    metrics['tv'].append(density_metrics.get_discretized_tv_for_image_density(
-                         np.asarray(density), np.asarray(q_samples), bin_size=[7, 7]))
 
     if logger is not None and itr % log_freq == 0:
+      metrics['loss'].append(loss.item())
+      metrics['l2_penalty'].append(l2_penalty.item())
+
+      key, subkey = jax.random.split(key)
+      p_samples = density_utils.sample_from_image_density(batch_size, density, subkey)
+      q_samples = sampler.sample(test_nsteps)
+      metrics['kldiv'].append(NPEET.npeet.entropy_estimators.kldiv(p_samples, q_samples))
+      metrics['tv'].append(density_metrics.get_discretized_tv_for_image_density(
+                           np.asarray(density), np.asarray(q_samples), bin_size=[7, 7]))
+
       log_message = (
           'Iter {:04d} | Time {:.4f}({:.4f}) | Loss {:.4f}({:.4f})'.format(
               itr, time_meter.val, time_meter.avg, loss_meter.val, loss_meter.avg
@@ -154,6 +182,7 @@ def lsd(density, energy, out_dir,
       }
       training_results = {
         'state_dict': ebm.state_dict(),
+        'critic_dict': critic.state_dict(),
         'density': density,
         'energy': energy,
       }
@@ -174,16 +203,19 @@ def lsd(density, energy, out_dir,
 
       ebm.cpu()
 
-      x_enc = critic(x)
-      xes = x_enc.detach().cpu().numpy()
-      trans = xes.min()
-      scale = xes.max() - xes.min()
-      xes = (xes - trans) / scale * 8 - 4
+      # x_enc = critic(x)
+      # xes = x_enc.detach().cpu().numpy()
+      # trans = xes.min()
+      # scale = xes.max() - xes.min()
+      # xes = (xes - trans) / scale * 8 - 4
 
       plt.figure(figsize=(4, 4))
-      visualize_transform([p_samples, q_samples.detach().cpu().numpy(), xes],
-                          ['data', 'model', 'embed'],
-                          [ebm], ['model'], npts=batch_size)
+      plt.imshow(density, alpha=0.3)
+      plt.scatter(p_samples[:, 0], p_samples[:, 1], color='g', s=0.5, alpha=0.5)
+      plt.scatter(q_samples[:, 0], q_samples[:, 1], color='r', s=0.5, alpha=0.5)
+      # visualize_transform([p_samples, q_samples.detach().cpu().numpy(), xes],
+      #                     ['data', 'model', 'embed'],
+      #                     [ebm], ['model'], npts=batch_size)
 
       fig_filename = os.path.join(out_dir, 'figs', '{:04d}.png'.format(itr))
       LSD_utils.makedirs(os.path.dirname(fig_filename))

@@ -1,7 +1,8 @@
-"""Samples a given density function with a specified method."""
+"""Learn a given distribution using with a specified method."""
 
 import argparse
 from collections import defaultdict
+import data.toy_data as toy_data
 import hamiltonian_mcmc.hamiltonian_mcmc as hmc
 import jax
 import matplotlib.image as plt_im
@@ -26,10 +27,10 @@ if __name__ == '__main__':
   parser.add_argument('--algorithm', type=str,
                       choices=['hmc', 'lsd'],
                       default='hmc')
-  parser.add_argument('--num_samples', type=int, default=100000)
+  parser.add_argument('--num_samples', type=int, default=10000)
   parser.add_argument('--K', type=int, default=100)
-  parser.add_argument('--eps', type=float, default=0.1)
-  parser.add_argument('--num_iter', type=int, default=10)
+  parser.add_argument('--eps', type=float, default=0.3)
+  parser.add_argument('--num_iter', type=int, default=15)
   parser.add_argument('--save_figures', type=bool, default=True)
   parser.add_argument('--density_initialization',
                       choices=['uniform', 'gaussian', 'constant'],
@@ -42,20 +43,28 @@ if __name__ == '__main__':
   if args.save_figures:
     os.makedirs(f"{args.result_folder}/snapshot_ims", exist_ok=True)
 
-  #### Load some image.
-  img = plt_im.imread('./data/labrador.jpg')
+  # #### Load some image.
+  # img = plt_im.imread('./data/labrador.jpg')
 
-  # plot and visualize
-  fig = plt.figure(figsize=(10, 10))
-  ax = fig.add_subplot(1, 1, 1)
-  ax.imshow(img)
-  ax.set_title('density source image')
-  plt.show()
+  # # plot and visualize
+  # fig = plt.figure(figsize=(10, 10))
+  # ax = fig.add_subplot(1, 1, 1)
+  # ax.imshow(img)
+  # ax.set_title('density source image')
+  # plt.show()
+
+  img = toy_data.generate_density(args.data)
+
+  if args.data == 'labrador':
+    crop = (10, 710, 240, 940)
+  else:
+    crop = (50, 450, 150, 500)
 
   #### Convert to energy function.
   ## First we get discrete energy and density values
   density, energy = prepare_image(
-      img, crop=(10, 710, 240, 940), white_cutoff=225, gauss_sigma=3, background=0.01
+    np.array(img), crop=crop, white_cutoff=225,
+    gauss_sigma=3, background=0.01
   )
 
   if args.save_figures:
@@ -63,13 +72,13 @@ if __name__ == '__main__':
     ax = fig.add_subplot(1, 1, 1)
     ax.imshow(density)
     ax.set_title('density')
-    fig.savefig(f"{args.result_folder}/labrador_density.png")
+    fig.savefig(f"{args.result_folder}/{args.data}_density.png")
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(1, 1, 1)
     ax.imshow(energy)
     ax.set_title('energy')
-    fig.savefig(f"{args.result_folder}/labrador_energy.png")
+    fig.savefig(f"{args.result_folder}/{args.data}_energy.png")
 
   #### Initialize the samples.
   x_max, y_max = density.shape
@@ -139,7 +148,7 @@ if __name__ == '__main__':
                      'eps': args.eps, 'initialization': args.density_initialization}
   training_results = {'final_samples': X, 'density': density, 'energy': energy}
   np.savez(f'{args.result_folder}/final_res.npy',
-    method_name=args.sampling_method, hyperparameter=hyperparameters,
+    method_name='HMC', hyperparameter=hyperparameters,
     metrics=metrics, training_results=training_results)
 
   if args.save_figures:

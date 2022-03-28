@@ -6,6 +6,7 @@ lecture demo code.
 
 import jax
 import numpy as np
+from tqdm import tqdm
 
 _SEED = 901
 
@@ -113,7 +114,7 @@ def hamiltonian_mcmc(x, E, K, eps=0.1, key=jax.random.PRNGKey(_SEED),
 
   v = jax.random.normal(key, shape=x.shape)
   x_orig = x
-  for i in range(K):
+  for i in tqdm(range(K)):
     x, v = hamilton_ode(x, v, E, M=M, eps=eps)
     key, subkey = jax.random.split(key)
     x = metropolis_hastings_adjustment(E, x_orig, x, key=subkey)
