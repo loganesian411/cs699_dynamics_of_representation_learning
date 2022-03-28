@@ -1,0 +1,17 @@
+### run this as ipython -i debug.ipy
+
+%load_ext autoreload
+%autoreload 2
+import utils.lsd_wrapper as lsd_wrapper
+import LSD.lsd_toy as lsd_core
+import data.toy_data as toy_data
+import utils.density as density_utils
+import torch
+import numpy as np
+density_data = toy_data.generate_density("labrador")
+density, energy = density_utils.prepare_image(density_data, crop=(10, 710, 240, 940), white_cutoff=225, gauss_sigma=3, background=0.01)
+out = lsd_wrapper.lsd(density, energy, "./results", eps=0.1)
+critic = networks.SmallMLP(2, n_out=2)
+net = networks.SmallMLP(2)
+ebm = lsd_core.EBM(net, None)
+ebm.load_state_dict(tmp["state_dict"])
