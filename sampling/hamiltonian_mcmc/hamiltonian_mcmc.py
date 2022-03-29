@@ -72,6 +72,7 @@ def metropolis_hastings_adjustment(E, x_prev, x_new,
   E_prev = jax.numpy.apply_along_axis(E, 1, x_prev)
   E_new = jax.numpy.apply_along_axis(E, 1, x_new)
   reject_inds = np.exp(-(E_prev - E_new)) > jax.random.uniform(key, shape=E_new.shape)
+  print('Acceptance rate: ' 1 - np.sum(reject_inds) / E_prev.shape[0])
   x_new.at[reject_inds, :].set(x_prev[reject_inds, :])
   return x_new
 
