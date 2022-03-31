@@ -11,7 +11,6 @@ import NPEET.npeet.entropy_estimators
 import numpy as np
 import os
 from utils.density import continuous_energy_from_image, prepare_image, sample_from_image_density
-import utils.lsd_wrapper as lsd_wrapper
 from utils.metrics import get_discretized_tv_for_image_density
 from tqdm import tqdm
 
@@ -31,6 +30,9 @@ if __name__ == '__main__':
   parser.add_argument('--K', type=int, default=100)
   parser.add_argument('--eps', type=float, default=0.3)
   parser.add_argument('--num_iter', type=int, default=15)
+  parser.add_argument('--precondition', type=bool, default=False)
+  parser.add_argument('--include_kinetic', type=bool, default=False)
+  parser.add_argument('--use_adaptive_eps', type=bool, default=False)
   parser.add_argument('--save_figures', type=bool, default=True)
   parser.add_argument('--density_initialization',
                       choices=['uniform', 'gaussian', 'constant'],
@@ -43,27 +45,29 @@ if __name__ == '__main__':
   if args.save_figures:
     os.makedirs(f"{args.result_folder}/snapshot_ims", exist_ok=True)
 
-  # #### Load some image.
-  # img = plt_im.imread('./data/labrador.jpg')
+  #### Load some image.
+  img = toy_data.generate_density(args.data)
 
-  # # plot and visualize
+  # # Plot and visualize
   # fig = plt.figure(figsize=(10, 10))
   # ax = fig.add_subplot(1, 1, 1)
   # ax.imshow(img)
   # ax.set_title('density source image')
   # plt.show()
 
-  img = toy_data.generate_density(args.data)
-
   if args.data == 'labrador':
     crop = (10, 710, 240, 940)
+  elif args.data == 'checkerboard':
+    crop = (250, 450, 300, 500)
+  elif args.data == 'moons':
+    crop = (50, 450, 100, 550)
   else:
-    crop = (50, 450, 150, 500)
+    crop = None
 
   #### Convert to energy function.
   ## First we get discrete energy and density values
   density, energy = prepare_image(
-    np.array(img), crop=crop, white_cutoff=225,
+    img, crop=crop, white_cutoff=225,
     gauss_sigma=3, background=0.01
   )
 
@@ -109,6 +113,15 @@ if __name__ == '__main__':
     X = jax.numpy.tile(jax.numpy.array([x_max // 2, y_max // 2], dtype='float'),
                        (num_samples, 1))
 
+  if args.save_figures:
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.scatter(np.array(X)[:, 1], np.array(X)[:, 0], s=0.5, alpha=0.5)
+    ax.imshow(density, alpha=0.3)
+    ax.set_title('Samples snapshot initial')
+    fig.savefig(f"{args.result_folder}/snapshot_ims/samples_iter_initial.png")
+    plt.close()
+
   # Create energy fn and its grad
   xp = jax.numpy.arange(x_max)
   yp = jax.numpy.arange(y_max)
@@ -117,14 +130,24 @@ if __name__ == '__main__':
   # You may use fill value to enforce some boundary conditions or some other way to enforce boundary conditions
   energy_fn = lambda coord: continuous_energy_from_image(coord, xp, yp, zp, fill_value=0)
   energy_fn_grad = jax.grad(energy_fn)
+
+  if args.precondition:
+    # Fit a gaussian to a random sampling of the data.
+    subkey, key = jax.random.split(key)
+    init_samples = sample_from_image_density(num_samples, density, subkey)
+    M = jax.numpy.cov(init_samples.T)
+    # M = jax.numpy.diag(jax.numpy.diag(jax.numpy.cov(init_samples.T)))
+  else:
+    M = None
   
   # Metrics: KL divergence, total variation, stein discrepancy (TODO).
   metrics = defaultdict(list)
   for i in tqdm(range(args.num_iter)):
-  # for i in range(args.num_iter):
     subkey, key = jax.random.split(key)
     X, _ = hmc.hamiltonian_mcmc(X, energy_fn, args.K, eps=args.eps, key=subkey,
-                                hamilton_ode=hmc.symplectic_integration)
+                                hamilton_ode=hmc.symplectic_integration, M=M,
+                                include_kinetic=args.include_kinetic,
+                                use_adaptive_eps=args.use_adaptive_eps)
 
     key, subkey = jax.random.split(key)
     true_samples = sample_from_image_density(num_samples, density, subkey)
@@ -157,8 +180,5 @@ if __name__ == '__main__':
     ax.scatter(np.array(X)[:, 1], np.array(X)[:, 0], s=0.5, alpha=0.5)
     ax.imshow(density, alpha=0.3)
     ax.set_title('Final samples distribution')
-    fig.savefig(f'{args.result_folder}/snapshot_ims/samples_final.png')
+    fig.savefig(f'{args.result_folder}/snapshot_ims/samples_iter_final.png')
     plt.close()
-
-  ## TODO(loganesian): What if we treated samples as a density to sample from
-  ## further using the continuous energy_from_image_function???

@@ -57,7 +57,8 @@ def symplectic_integration(x, v, E, M=None, eps=0.1):
   return x_new, v_new
 
 def metropolis_hastings_adjustment(E, x_prev, x_new,
-                                   key=jax.random.PRNGKey(_SEED)):
+                                   key=jax.random.PRNGKey(_SEED),
+                                   v_prev=None, v_new=None, M=None):
   """Performs Metropolis-Hastings accept/reject step.
 
   Args:
@@ -68,17 +69,31 @@ def metropolis_hastings_adjustment(E, x_prev, x_new,
     x_new: np.array of shape (num_samples, 2). Proposed new locations for each
       sample.
     key: jax.random.PRNGKey() output. Used to seed jax random number generators.
+
+  Returns:
+    (x_new, acceptance_rate) where x_new is the new state after performing MHA &
+    acceptance_rate reflects what percentage of x_new is actually new.
   """
   E_prev = jax.numpy.apply_along_axis(E, 1, x_prev)
   E_new = jax.numpy.apply_along_axis(E, 1, x_new)
-  reject_inds = np.exp(-(E_prev - E_new)) > jax.random.uniform(key, shape=E_new.shape)
-  print('Acceptance rate: ' 1 - np.sum(reject_inds) / E_prev.shape[0])
-  x_new.at[reject_inds, :].set(x_prev[reject_inds, :])
-  return x_new
+
+  # Optionally add kinetic energy.
+  if v_prev is not None and v_new is not None and M is not None:
+    v_mean = jax.numpy.zeros(M.shape[0])
+    K_prev = -jax.scipy.stats.multivariate_normal.logpdf(v_prev, v_mean, M)
+    E_prev += K_prev
+    K_new = -jax.scipy.stats.multivariate_normal.logpdf(v_new, v_mean, M)
+    E_new += K_new
+
+  accept_inds = np.exp(E_prev - E_new) > jax.random.uniform(key, shape=E_new.shape)
+  acceptance_rate = np.sum(accept_inds) / E_prev.shape[0]
+  x_new.at[~accept_inds, :].set(x_prev[~accept_inds, :])
+  return x_new, acceptance_rate
 
 # K is the number of steps before selecting random velocity term.
 def hamiltonian_mcmc(x, E, K, eps=0.1, key=jax.random.PRNGKey(_SEED),
-                     M=None, hamilton_ode=symplectic_integration):
+                     M=None, hamilton_ode=symplectic_integration,
+                     lograte=10, include_kinetic=False, use_adaptive_eps=False):
   """Hamiltonian Monte Carlo Markov Chain sampler.
 
   Example usage:
@@ -113,11 +128,35 @@ def hamiltonian_mcmc(x, E, K, eps=0.1, key=jax.random.PRNGKey(_SEED),
   """
   if M is None: M = jax.numpy.identity(x.shape[1])
 
-  v = jax.random.normal(key, shape=x.shape)
-  x_orig = x
+  v = jax.random.multivariate_normal(key,
+                                     jax.numpy.zeros(M.shape[0]), # zero mean
+                                     M, # covariance
+                                     shape=(x.shape[0],))
+
+  x_orig, v_orig = x, v
+  prev_acceptance_rate, accept_thresh = 0.5, 0.05
   for i in tqdm(range(K)):
     x, v = hamilton_ode(x, v, E, M=M, eps=eps)
     key, subkey = jax.random.split(key)
-    x = metropolis_hastings_adjustment(E, x_orig, x, key=subkey)
-    x_orig = x
+    if include_kinetic:
+      x, acceptance_rate = metropolis_hastings_adjustment(E, x_orig, x, key=subkey,
+        v_prev=v_orig, v_new=v, M=M)
+    else:
+      x, acceptance_rate = metropolis_hastings_adjustment(E, x_orig, x, key=subkey)
+
+    if i % lograte == 0:
+      print('\nAcceptance rate: ', acceptance_rate, '\n')
+    
+    # This is from LSD.utils.HMCSample.sample() implementation.
+    if use_adaptive_eps:
+      if acceptance_rate < 0.4:
+        eps *= .67
+        print('Decreasing eps.')
+      elif acceptance_rate > 0.9:
+        eps *= 1.33
+        print('Increasing eps.')
+    
+    prev_acceptance_rate = acceptance_rate
+    x_orig, v_orig = x, v
+
   return x, v
