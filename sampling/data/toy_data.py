@@ -28,10 +28,7 @@ def convert_image_to_array(fig):
   """Routine to convert figure object to an array."""
   # https://stackoverflow.com/questions/7821518/matplotlib-save-plot-to-numpy-array
   data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-  # 1 minus to invert --> rings are high density regions???
-  # data = skimage.color.rgb2gray(data) # convert to grayscale
-  return jax.numpy.asarray(data)
+  return data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
 # TODO(loganesian): num_samples should eventually be removed.
 def generate_density(data, num_samples=100000, nx=10, ny=12):
@@ -129,11 +126,11 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
                     jax.numpy.array([nx/1.4, ny/5]),
                     jax.numpy.array([[1., 0.7], [0.7, 1.]])
                   )
-    # probs /= jax.numpy.sum(probs) # our utils normalize by default?
+
     fig = plot_target(probs)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'mixture_of_2gaussians.png')) #, dpi=100)
     return convert_image_to_array(fig)
 
   # Default
-  return generate_density('mixture_of_2gaussians', num_samples, nx, ny)
+  return generate_density('labrador', num_samples, nx, ny)

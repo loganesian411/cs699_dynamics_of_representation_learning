@@ -2,16 +2,66 @@
 
 %load_ext autoreload
 %autoreload 2
+
+import matplotlib
 import utils.lsd_wrapper as lsd_wrapper
 import LSD.lsd_toy as lsd_core
 import data.toy_data as toy_data
 import utils.density as density_utils
 import torch
+import jax
 import numpy as np
+import matplotlib.pyplot as plt
+
+matplotlib.use("TkAgg")
+
+key=jax.random.PRNGKey(0)
+# crop=(50, 450, 150, 500)
+density_data2 = toy_data.generate_density("checkerboard")
+import ipdb; ipdb.set_trace()
+density2, energy2 = density_utils.prepare_image(density_data2, crop=(250, 450, 300, 500), white_cutoff=225, gauss_sigma=0, background=0.01)
+import ipdb; ipdb.set_trace()
+
+key, subkey = jax.random.split(key)
+x2 = density_utils.sample_from_image_density(100000, density2, subkey)
+import ipdb; ipdb.set_trace()
+
+key, subkey = jax.random.split(key)
+x2_v2 = density_utils.sample_from_image_density(100000, density2, subkey, use_softmax=True)
+import ipdb; ipdb.set_trace()
+
+########
+
 density_data = toy_data.generate_density("labrador")
+import ipdb; ipdb.set_trace()
 density, energy = density_utils.prepare_image(density_data, crop=(10, 710, 240, 940), white_cutoff=225, gauss_sigma=3, background=0.01)
-out = lsd_wrapper.lsd(density, energy, "./results", eps=0.1)
-critic = networks.SmallMLP(2, n_out=2)
-net = networks.SmallMLP(2)
-ebm = lsd_core.EBM(net, None)
-ebm.load_state_dict(tmp["state_dict"])
+import ipdb; ipdb.set_trace()
+
+key, subkey = jax.random.split(key)
+x = density_utils.sample_from_image_density(100000, density, subkey)
+import ipdb; ipdb.set_trace()
+
+key=jax.random.PRNGKey(0)
+key, subkey = jax.random.split(key)
+x_v2 = density_utils.sample_from_image_density(100000, density, subkey, use_softmax=True)
+import ipdb; ipdb.set_trace()
+
+density_data3 = toy_data.generate_density("moons")
+import ipdb; ipdb.set_trace()
+density3, energy3 = density_utils.prepare_image(density_data3, crop=(50, 450, 100, 550), white_cutoff=225, gauss_sigma=3, background=0.01)
+import ipdb; ipdb.set_trace()
+
+key, subkey = jax.random.split(key)
+x3 = density_utils.sample_from_image_density(100000, density3, subkey)
+import ipdb; ipdb.set_trace()
+
+key, subkey = jax.random.split(key)
+x3_v2 = density_utils.sample_from_image_density(100000, density3, subkey, use_softmax=True)
+import ipdb; ipdb.set_trace()
+
+out = lsd_wrapper.lsd(density, energy, "./results/lsd_test", eps=0.1)
+
+# critic = networks.SmallMLP(2, n_out=2)
+# net = networks.SmallMLP(2)
+# ebm = lsd_core.EBM(net, None)
+# ebm.load_state_dict(tmp["state_dict"])
