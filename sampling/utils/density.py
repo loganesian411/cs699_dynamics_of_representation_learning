@@ -53,7 +53,7 @@ def gaussian_mixture_sampler(N, means, sigmas, weights, key):
     return std_normal_samples * sigmas[modes].reshape(std_normal_samples.shape[0], 1) + means[modes]
 
 
-def sample_from_image_density(N, density, key, use_softmax=False):
+def sample_from_image_density(N, density, key):
     """
         adapted from https://github.com/noegroup/stochastic_normalizing_flows/blob/main/snf_code/snf_code/image.py#L138
 
@@ -65,12 +65,7 @@ def sample_from_image_density(N, density, key, use_softmax=False):
         :return: samples shape=(N,2)
     """
     # normalize
-    import ipdb; ipdb.set_trace()
-    if not use_softmax:
-        density = density / density.sum()
-    else:
-        density = jax.nn.softmax(density)
-    import ipdb; ipdb.set_trace()
+    density = density / density.sum()
 
     flat_density = density.flatten()
     subkey, key = jax.random.split(key)
