@@ -13,12 +13,12 @@ import jax
 import numpy as np
 import matplotlib.pyplot as plt
 
-# matplotlib.use("TkAgg")
+matplotlib.use("TkAgg")
 
 density_data2 = toy_data.generate_density("checkerboard")
 density2, energy2 = density_utils.prepare_image(density_data2, crop=(250, 450, 300, 500), white_cutoff=225, gauss_sigma=0, background=0.01)
 
-out = lsd_wrapper.lsd(density2, energy2, "./results/lsd_test", eps=0.1)
+out = lsd_wrapper.lsd(density2, energy2, "./results/lsd_test", eps=0.3, K=100)
 
 # critic = networks.SmallMLP(2, n_out=2)
 # net = networks.SmallMLP(2)

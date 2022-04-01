@@ -59,6 +59,7 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
     fig.set_size_inches(5, 5)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'rings.png'), dpi=100)
+    plt.close()
     return convert_image_to_array(fig)
 
   elif data == 'moons':
@@ -74,6 +75,7 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
     plt.box(False)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'moons.png'), dpi=100)
+    plt.close()
     return convert_image_to_array(fig)
 
   elif data == 'chelsea':
@@ -84,6 +86,7 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
     plt.box(False)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'chelsea.png'), dpi=100)
+    plt.close()
     return convert_image_to_array(fig)
 
   elif data == 'checkerboard':
@@ -94,6 +97,7 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
     plt.box(False)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'checkerboard.png'), dpi=100)
+    plt.close()
     return convert_image_to_array(fig)
 
   elif data == 'labrador':
@@ -130,6 +134,7 @@ def generate_density(data, num_samples=100000, nx=10, ny=12):
     fig = plot_target(probs)
     # Have to save image in order to convert to an array afterwards.
     fig.savefig(os.path.join(dirout, 'mixture_of_2gaussians.png')) #, dpi=100)
+    plt.close()
     return convert_image_to_array(fig)
 
   # Default
