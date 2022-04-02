@@ -1,9 +1,10 @@
-## TODO(loganesian): update the file docstring.
 """Script to generate different test density functions.
 
-The implementation is taken from rtqichen's ffjord GitHub repository and from 
+The datasets are taken both from rtqichen's ffjord GitHub repository and from 
 necludov's continuous-gibbs GitHub repository with only minor modifications to
-work with our pipeline (for example, porting to jax).
+work with our pipeline. In order to generalize to use datasets for both LSD+EBM
+and our implementation of HMC sampling, we had to convert the datasets to source
+images that would be the density we are sampling from.
 
 Source code: https://github.com/rtqichen/ffjord/blob/master/lib/toy_data.py
 Associated Paper: Will Grathwohl*, Ricky T. Q. Chen*, Jesse Bettencourt,
@@ -30,17 +31,25 @@ def convert_image_to_array(fig):
   data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
   return data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-# TODO(loganesian): num_samples should eventually be removed.
 def generate_density(data, num_samples=100000, nx=10, ny=12):
   """Generates an image to use as a toy density.
 
+  Note: this function will also save out the images to disc in the directory
+  this module is located. This is an unfortunate side-effect of how the image
+  densities are being constructed.
+
   Args:
     data: str. Name of the dataset to generate. One of:
-      ""
-    rng:
+      
+    num_samples: int. Only relevant for the moons dataset. Number of points
+      to sample from the sklearn.dataset before converting to an image.
+    nx: int. Only relevant for the mixture_of_2gaussians dataset. This is the
+      number of bins along the x-axis.
+    ny: int. Only relevant for the mixture_of_2gaussians dataset. This is the
+      number of bins along the y-axis.
 
   Returns:
-
+    img: np.array that is the image density we will be sampling.
   """
   dirout = os.path.dirname(__file__)
 
