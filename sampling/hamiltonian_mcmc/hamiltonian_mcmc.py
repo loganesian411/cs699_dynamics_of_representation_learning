@@ -1,7 +1,7 @@
 """Hamiltonian MCMC module.
 
 Following implementations are heavily based on the CS699 Feb 2
-lecture demo code.
+lecture demo code and Chen, T. et. al. (2014).
 """
 
 import jax
@@ -61,6 +61,9 @@ def metropolis_hastings_adjustment(E, x_prev, x_new,
                                    v_prev=None, v_new=None, M=None):
   """Performs Metropolis-Hastings accept/reject step.
 
+  If v_prev, v_new, and M are all provided, the kinetic energy term will also
+  be included in the MHA comparison.
+
   Args:
     E: function handle. Will return the energy distribution associated with an
       input position x, of size (1, 2), computed as E(x).
@@ -69,6 +72,11 @@ def metropolis_hastings_adjustment(E, x_prev, x_new,
     x_new: np.array of shape (num_samples, 2). Proposed new locations for each
       sample.
     key: jax.random.PRNGKey() output. Used to seed jax random number generators.
+    v_prev: np.array of shape (num_samples, 2). Current velocity values for each
+      sample.
+    v_new: np.array of shape (num_samples, 2). Proposed new velocity values for
+      each sample.
+    M: np.array of shape (2, 2). Mass term associated with the samples.
 
   Returns:
     (x_new, acceptance_rate) where x_new is the new state after performing MHA &
@@ -90,7 +98,6 @@ def metropolis_hastings_adjustment(E, x_prev, x_new,
   x_new.at[~accept_inds, :].set(x_prev[~accept_inds, :])
   return x_new, acceptance_rate
 
-# K is the number of steps before selecting random velocity term.
 def hamiltonian_mcmc(x, E, K, eps=0.1, key=jax.random.PRNGKey(_SEED),
                      M=None, hamilton_ode=symplectic_integration,
                      lograte=10, include_kinetic=False, use_adaptive_eps=False):
@@ -114,13 +121,19 @@ def hamiltonian_mcmc(x, E, K, eps=0.1, key=jax.random.PRNGKey(_SEED),
     E: function handle. Will return the energy distribution associated with an
       input position x, of size (1, 2), computed as E(x).
     K: int. The step size for the sampler, that is the number of iterations the
-      sampler will run before returning the sample positions.
+      sampler will run before returning the sample positions. This corresponds
+      to the number of steps before random velocity noise is added to the system.
     eps: float. Learning rate to use in integration. Default is 0.1.
     key: jax.random.PRNGKey() output. Used to seed jax random number generators.
     M: np.array of size (x_dim, x_dim), that is (2, 2). Preconditioner "mass"
       matrix. Default is identity.
     hamilton_ode: function handle. The integration method used to propogate the
       state space. Default is symplectic_integration.
+    lograte: int. The frequency at which to display debug logs. Default 10.
+    include_kinetic: bool. Include the kinetic energy in the HMC energy function.
+      Otherwise, it will only use the potential energy defined by E. Default False.
+    use_adaptive_eps: bool. Use a basic adaptive epsilon adjustment algorithm
+      based on MHA acceptance rate.
 
   Returns:
     Tuple (x, v) after K iterations of sampling. x and v are both of shape

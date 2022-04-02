@@ -4,6 +4,7 @@ Effectively moved the main() of LSD.lsd_toy.py to a method with minor
 modifications to run the same tests as the HMC sampler.
 """
 from collections import defaultdict
+import hamiltonian_mcmc.hamiltonian_mcmc as hmc
 import jax
 import LSD.lsd_toy as lsd_core
 import LSD.networks as networks
@@ -31,9 +32,9 @@ def sample_data(density, batch_size, key=jax.random.PRNGKey(0)):
   return x
 
 def lsd(density, energy, out_dir,
-        exact_trace=True,  niters=10000, c_iters=5, # critic fn inner loops.
+        exact_trace=True, niters=10000, c_iters=2, # 5, # critic fn inner loops.
         lr=1e-3, weight_decay=0, critic_weight_decay=0, l2=10.,
-        batch_size=1000, test_nsteps=10, eps=0.3,
+        batch_size=5000, test_nsteps=10, K=5, eps=0.3, # 0.3,
         density_initialization='gaussian', precondition_HMC=False,
         key=jax.random.PRNGKey(0), debug_mode=False,
         log_freq=100, save_freq=10000, viz_freq=100, logger=None):
@@ -45,12 +46,13 @@ def lsd(density, energy, out_dir,
 
   plt.figure(figsize=(4, 4))
   plt.imshow(density, alpha=0.3)
-  plt.scatter(init_batch[:, 0].detach().numpy(),
-              init_batch[:, 1].detach().numpy(),
+  plt.scatter(init_batch[:, 1].detach().numpy(),
+              init_batch[:, 0].detach().numpy(),
               color='g', s=0.5, alpha=0.5)
   fig_filename = os.path.join(out_dir, 'figs', 'starter.png')
   LSD_utils.makedirs(os.path.dirname(fig_filename))
   plt.savefig(fig_filename)
+  plt.close()
 
   # Define a base distribution
   if density_initialization not in ['gaussian', 'uniform', 'std_normal']:
@@ -94,7 +96,7 @@ def lsd(density, energy, out_dir,
   # distributed with some sort of covariance options to precondition -- based on
   # the true data distribution (assuming based on the cov variables above). Then
   # the energy driving the sampling is potential + kinetic.
-  sampler = LSD_utils.HMCSampler(ebm, eps, 5, init_fn, device=device,
+  sampler = LSD_utils.HMCSampler(ebm, eps, K, init_fn, device=device,
                                  covariance_matrix=cov)
 
   if logger is not None:
@@ -121,11 +123,13 @@ def lsd(density, energy, out_dir,
     x = sample_data(density, batch_size, key=key)
     x.requires_grad_()
 
-    # compute dlogp(x)/dx
+    # Compute dlogp(x)/dx
     logp_u = ebm(x)
+
     sq = lsd_core.keep_grad(logp_u.sum(), x)
     fx = critic(x)
-    # compute (dlogp(x)/dx)^T * f(x)
+
+    # Compute (dlogp(x)/dx)^T * f(x)
     sq_fx = (sq * fx).sum(-1)
 
     # Compute/estimate Tr(df/dx)
@@ -150,7 +154,7 @@ def lsd(density, energy, out_dir,
     loss_meter.update(loss.item())
     time_meter.update(time.time() - end)
 
-    if logger is not None and itr % log_freq == 0:
+    if itr % log_freq == 0:
       metrics['loss'].append(loss.item())
       metrics['l2_penalty'].append(l2_penalty.item())
 
@@ -161,12 +165,14 @@ def lsd(density, energy, out_dir,
       metrics['tv'].append(density_metrics.get_discretized_tv_for_image_density(
                            np.asarray(density), np.asarray(q_samples), bin_size=[7, 7]))
 
-      log_message = (
-          'Iter {:04d} | Time {:.4f}({:.4f}) | Loss {:.4f}({:.4f})'.format(
-              itr, time_meter.val, time_meter.avg, loss_meter.val, loss_meter.avg
-          )
-      )
-      logger.info(log_message)
+      import ipdb; ipdb.set_trace()
+      if logger is not None:
+        log_message = (
+            'Iter {:04d} | Time {:.4f}({:.4f}) | Loss {:.4f}({:.4f})'.format(
+                itr, time_meter.val, time_meter.avg, loss_meter.val, loss_meter.avg
+            )
+        )
+        logger.info(log_message)
 
     if itr % save_freq == 0 or itr == niters:
       ebm.cpu()
@@ -200,7 +206,17 @@ def lsd(density, energy, out_dir,
       key, subkey = jax.random.split(key)
       p_samples = density_utils.sample_from_image_density(batch_size, density, subkey)
       q_samples = sampler.sample(test_nsteps)
-
+      # q_samples2 = init_fn().detach().numpy()
+      # energy_fn = lambda x: jax.numpy.array(ebm(torch.tensor(x)).detach().numpy())
+      # for _ in tqdm(range(test_nsteps)):
+      #   key, subkey = jax.random.split(key)
+      #   q_samples2, _ = hmc.hamiltonian_mcmc(q_samples2, energy_fn, 5,
+      #                                       eps=eps, key=subkey,
+      #                                       M=cov.detach().numpy(),
+      #                                       hamilton_ode=hmc.symplectic_integration,
+      #                                       include_kinetic=False,
+      #                                       use_adaptive_eps=False)
+      import ipdb; ipdb.set_trace()
       ebm.cpu()
 
       # x_enc = critic(x)
@@ -211,8 +227,8 @@ def lsd(density, energy, out_dir,
 
       plt.figure(figsize=(4, 4))
       plt.imshow(density, alpha=0.3)
-      plt.scatter(p_samples[:, 0], p_samples[:, 1], color='g', s=0.5, alpha=0.5)
-      plt.scatter(q_samples[:, 0], q_samples[:, 1], color='r', s=0.5, alpha=0.5)
+      plt.scatter(p_samples[:, 1], p_samples[:, 0], color='g', s=0.5, alpha=0.5)
+      plt.scatter(q_samples[:, 1], q_samples[:, 0], color='r', s=0.5, alpha=0.5)
       # visualize_transform([p_samples, q_samples.detach().cpu().numpy(), xes],
       #                     ['data', 'model', 'embed'],
       #                     [ebm], ['model'], npts=batch_size)

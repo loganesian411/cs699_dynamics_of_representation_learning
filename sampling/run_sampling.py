@@ -1,11 +1,10 @@
-"""Learn a given distribution using with a specified method."""
+"""Run HMC sampling with a user-specified energy function."""
 
 import argparse
 from collections import defaultdict
 import data.toy_data as toy_data
 import hamiltonian_mcmc.hamiltonian_mcmc as hmc
 import jax
-import matplotlib.image as plt_im
 import matplotlib.pyplot as plt
 import NPEET.npeet.entropy_estimators
 import numpy as np
@@ -18,25 +17,30 @@ _SNAPSHOT_FREQUENCY = 1
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--result_folder', type=str, default='results')
+  parser.add_argument('--result_folder', type=str, default='./results')
   parser.add_argument('--data', type=str,
                       choices=['moons', 'checkerboard', 'rings', 'labrador',
                               'chelsea', 'mixture_of_2gaussians'],
                      default='labrador')
-  parser.add_argument('--algorithm', type=str,
-                      choices=['hmc', 'lsd'],
-                      default='hmc')
   parser.add_argument('--num_samples', type=int, default=10000)
-  parser.add_argument('--K', type=int, default=100)
-  parser.add_argument('--eps', type=float, default=0.3)
-  parser.add_argument('--num_iter', type=int, default=15)
-  parser.add_argument('--precondition', type=bool, default=False)
-  parser.add_argument('--include_kinetic', type=bool, default=False)
-  parser.add_argument('--use_adaptive_eps', type=bool, default=False)
+  parser.add_argument('--K', type=int, default=100,
+                      help='HMC chain length before injecting velocity noise.')
+  parser.add_argument('--eps', type=float, default=0.3,
+                      help='Learning rate for HMC.')
+  parser.add_argument('--num_iter', type=int, default=15,
+                      help='Number of outside iterations, each with K steps.')
+  parser.add_argument('--precondition', type=bool, default=False,
+                      help='Optional preconditioning for the HMC sampler.')
+  parser.add_argument('--include_kinetic', type=bool, default=False,
+                      help='Include kinetic energy in the HMC energy function.')
+  parser.add_argument('--use_adaptive_eps', type=bool, default=False,
+                      help='Include a really basic adaptive epsilon adjustment '\
+                           'step for the HMC sampling.')
   parser.add_argument('--save_figures', type=bool, default=True)
   parser.add_argument('--density_initialization',
                       choices=['uniform', 'gaussian', 'constant'],
-                      default='uniform')
+                      default='uniform',
+                      help='Density to sample for the initial set of samples.')
   
   args = parser.parse_args()
 
@@ -100,15 +104,19 @@ if __name__ == '__main__':
                                             dtype='float64')
                           ])
   elif args.density_initialization == 'gaussian':
-    # Gaussian spread out the initialized samples
+    # Gaussian distributed initial samples.
+    subkey, key = jax.random.split(key)
+    some_samples = sample_from_image_density(num_samples, density, subkey)
+    mean = some_samples.mean(0)
+    std = some_samples.std(0, ddof=1)
     subkey_x, key = jax.random.split(key)
     subkey_y, key = jax.random.split(key)
     X = jax.numpy.hstack([jax.random.normal(subkey_x, shape=(num_samples, 1),
-                                            dtype='float64'),
+                                            dtype='float64') * std[0] + mean[0],
                           jax.random.normal(subkey_y, shape=(num_samples, 1),
-                                            dtype='float64')
+                                            dtype='float64') * std[0] + mean[1]
                           ])
-  else: # constant, start at center
+  else: # Constant, start at center. Is bad -- do not use.
     # Start with all particles at the center of the image.
     X = jax.numpy.tile(jax.numpy.array([x_max // 2, y_max // 2], dtype='float'),
                        (num_samples, 1))
@@ -140,7 +148,7 @@ if __name__ == '__main__':
   else:
     M = None
   
-  # Metrics: KL divergence, total variation, stein discrepancy (TODO).
+  # Metrics: KL divergence, total variation.
   metrics = defaultdict(list)
   for i in tqdm(range(args.num_iter)):
     subkey, key = jax.random.split(key)
@@ -167,8 +175,9 @@ if __name__ == '__main__':
         fig.savefig(f"{args.result_folder}/snapshot_ims/samples_iter_{i}.png")
         plt.close()
 
-  hyperparameters = {'ODE_solver': hmc.symplectic_integration, 'K': args.K, 'num_iter': args.num_iter,
-                     'eps': args.eps, 'initialization': args.density_initialization}
+  hyperparameters = {'ODE_solver': hmc.symplectic_integration, 'K': args.K,
+                     'num_iter': args.num_iter, 'eps': args.eps,
+                     'initialization': args.density_initialization}
   training_results = {'final_samples': X, 'density': density, 'energy': energy}
   np.savez(f'{args.result_folder}/final_res.npy',
     method_name='HMC', hyperparameter=hyperparameters,
