@@ -111,8 +111,8 @@ def lsd(density, energy, out_dir,
 
   # Optimizers.
   optimizer = torch.optim.Adam(ebm.parameters(), lr=lr, weight_decay=weight_decay,
-                               betas=(.9, .999))
-                               # betas=(.0, .999))
+                               # betas=(.9, .999))
+                               betas=(.0, .999))
   critic_optimizer = torch.optim.Adam(critic.parameters(), lr=lr,
                                       betas=(.0, .999),
                                       # betas=(.9, .999),
