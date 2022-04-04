@@ -2,6 +2,9 @@
 
 Following implementations are heavily based on the CS699 Feb 2
 lecture demo code and Chen, T. et. al. (2014).
+
+NOTE: This is identical to hamiltonian_mcmc.py but modified to be used with the
+LSD pipeline.
 """
 
 import jax
