@@ -4,3 +4,6 @@
 [submodule "sampling/LSD"]
 	path = sampling/LSD
 	url = https://github.com/wgrathwohl/LSD
+[submodule "domain_shift/wilds"]
+	path = domain_shift/wilds
+	url = https://github.com/p-lambda/wilds
