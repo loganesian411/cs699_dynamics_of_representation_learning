@@ -479,7 +479,6 @@ def main():
             is_best = True
         """
         
-        
         best_epoch = 1
         epoch = best_epoch
         is_best = True

@@ -7,3 +7,6 @@
 [submodule "domain_shift/wilds"]
 	path = domain_shift/wilds
 	url = https://github.com/p-lambda/wilds
+[submodule "domain_shift/tent"]
+	path = domain_shift/tent
+	url = https://github.com/DequanWang/tent
