@@ -164,7 +164,9 @@ def initialize_model(config, d_out, is_featurizer=False):
     if config.tent_model:
         model = tent.configure_model(model)
         params, param_names = tent.collect_params(model)
-        optimizer = optim.Adam(params, lr=1e-3, betas=(0.9,0.999), weight_decay=0)
+        from optimizer import initialize_optimizer
+        optimizer = initialize_optimizer(config, model)
+        # optimizer = optim.Adam(params, lr=1e-3, betas=(0.9,0.999), weight_decay=0)
         model = tent.Tent(model, optimizer)
 
     return model
