@@ -35,3 +35,14 @@ python3 wilds/examples/run_expt_tent.py --dataset camelyon17 --algorithm ERM --r
     --pretrained_model_path <path/to/camelyon17_erm_densenet121_seedX/best_model.pth>
 ```
 
+Reference:
+
+```bibtex
+@inproceedings{wang2021tent,
+  title={Tent: Fully Test-Time Adaptation by Entropy Minimization},
+  author={Wang, Dequan and Shelhamer, Evan and Liu, Shaoteng and Olshausen, Bruno and Darrell, Trevor},
+  booktitle={International Conference on Learning Representations},
+  year={2021},
+  url={https://openreview.net/forum?id=uXl3bZLkr3c}
+}
+```
