@@ -326,7 +326,6 @@ def main():
     log_group_data({"unlabeled": unlabeled_dataset}, log_grouper, logger)
 
   if config.eval_pred_only: # will load predictions and evaluate them.
-    import ipdb; ipdb.set_trace()
     evaluate.evaluate_benchmark(
       config.dataset, config.predictions_dir, config.log_dir, config.root_dir,
       available_seeds=[config.seed],
