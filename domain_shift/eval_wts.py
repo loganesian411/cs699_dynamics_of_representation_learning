@@ -13,8 +13,10 @@ import wilds
 from wilds.common.data_loaders import get_train_loader, get_eval_loader
 from wilds.common.grouper import CombinatorialGrouper
 
+import evaluate
 from utils import set_seed, Logger, BatchLogger, log_config, ParseKwargs, load, log_group_data, parse_bool
-from train import evaluate
+# from train import evaluate
+import train
 from algorithms.initializer import initialize_algorithm
 from transforms import initialize_transform
 from configs.utils import populate_defaults
@@ -23,6 +25,8 @@ import configs.supported as supported
 # Necessary for large images of GlobalWheat
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+_DEFAULT_LOG_DIR = './logs'
 
 def main():
   """Arg defaults are filled in according to examples/configs/."""
@@ -33,10 +37,21 @@ def main():
   parser.add_argument('--algorithm', required=True, choices=supported.algorithms)
   parser.add_argument('--root_dir', required=True,
                       help='The directory where [dataset]/data can be found (or should be downloaded to, if it does not exist).')
-  parser.add_argument('--log_dir', default='./logs')
+  
+  parser.add_argument('--log_dir', default=None)
+  parser.add_argument('--combined_log_dir', default=None)
+
+  input_group = parser.add_mutually_exclusive_group(required=True)
+  input_group.add_argument('--pretrained_ERM_dir', type=str)
+  input_group.add_argument('--predictions_dir', type=str)
+
   parser.add_argument('--progress_bar', type=parse_bool, const=True, nargs='?', default=False)
   parser.add_argument('--seed_to_use', type=int, default=0) # nargs='*'
   parser.add_argument('--eval_only', type=parse_bool, const=True, nargs='?', default=True)
+  parser.add_argument('--eval_pred_only', type=parse_bool, const=True, nargs='?',
+                      default=False, help='Evaluate saved out existing predictions.')
+
+  parser.add_argument('--tent_model', type=parse_bool, const=True, nargs='?', default=False)
   parser.add_argument('--frac', type=float, default=1.0,
                       help='Convenience parameter that scales all dataset splits down to the specified fraction, for development purposes. Note that this also scales the test set down, so the reported numbers are not comparable with the full test set.')
 
@@ -142,7 +157,7 @@ def main():
 
   # Misc
   parser.add_argument('--device', type=int, nargs='+', default=[0])
-  parser.add_argument('--seed', type=int, default=0)
+  parser.add_argument('--seed', type=int, default=None)
   parser.add_argument('--log_every', default=50, type=int)
   parser.add_argument('--save_step', type=int)
   parser.add_argument('--save_best', type=parse_bool, const=True, nargs='?', default=True)
@@ -153,6 +168,22 @@ def main():
 
   config = parser.parse_args()
   config = populate_defaults(config)
+
+  if config.seed is None:
+    config.seed = config.seed_to_use
+  print(f'Setting seed: {config.seed}')
+
+  if not config.log_dir:
+    config.log_dir = os.path.join(config.pretrained_ERM_dir,
+      f'camelyon17_erm_densenet121_seed{config.seed_to_use}')
+  if not config.combined_log_dir:
+    config.combined_log_dir = _DEFAULT_LOG_DIR
+
+  if config.eval_pred_only and not config.predictions_dir:
+    print('Cannot eval predictions if predictions_dir not provided!')
+    return -1
+  if config.eval_pred_only and not config.log_dir:
+    config.log_dir = _DEFAULT_LOG_DIR
 
   # Set device
   if torch.cuda.is_available():
@@ -168,16 +199,15 @@ def main():
     config.use_data_parallel = False
     config.device = torch.device("cpu")
 
-  if os.path.exists(config.log_dir) and config.eval_only:
-    resume=False
-    mode='a'
-  else:
-    resume=False
-    mode='w'
+  resume = False
+  combined_mode = 'a' if (os.path.exists(config.combined_log_dir) and config.eval_only) else 'w'
+  mode='a' if (os.path.exists(config.log_dir) and config.eval_only) else 'w'
 
   if not os.path.exists(config.log_dir):
     os.makedirs(config.log_dir)
-  logger = Logger(os.path.join(config.log_dir, 'log.txt'), mode)
+  if not os.path.exists(config.combined_log_dir):
+    os.makedirs(config.combined_log_dir)
+  logger = Logger(os.path.join(config.combined_log_dir, 'log.txt'), combined_mode)
 
   # Record config
   log_config(config, logger)
@@ -193,6 +223,14 @@ def main():
     download=config.download,
     split_scheme=config.split_scheme,
     **config.dataset_kwargs)
+
+  if config.eval_pred_only:
+    additional_kwargs = defaultdict(dict)
+    additional_kwargs['get_dataset'] = {
+      'version':config.version,
+      'split_scheme': config.split_scheme
+    }
+    additional_kwargs['get_dataset'].update(**config.dataset_kwargs)
 
   # Transforms & data augmentations for labeled dataset
   # To modify data augmentation, modify the following code block.
@@ -220,6 +258,8 @@ def main():
   # Configure labeled torch datasets (WILDS dataset splits)
   # Default split names: WILDSDataset.DEFAULT_SPLITS = {'train': 0, 'val': 1, 'test': 2}
   datasets = defaultdict(dict)
+  if config.eval_pred_only:
+    additional_kwargs['subset_kwargs'] = defaultdict(dict)
   for split in full_dataset.split_dict.keys():
     if split=='train':
       transform = train_transform
@@ -235,6 +275,10 @@ def main():
       split,
       frac=config.frac,
       transform=transform)
+
+    if config.eval_pred_only:
+      additional_kwargs['subset_kwargs'][split]['frac'] = config.frac
+      additional_kwargs['subset_kwargs'][split]['transform'] = transform
 
     if split == 'train':
       datasets[split]['loader'] = get_train_loader(
@@ -261,10 +305,10 @@ def main():
 
     # Loggers
     datasets[split]['eval_logger'] = BatchLogger(
-        os.path.join(config.log_dir, f'{split}_eval.csv'), mode=mode,
+        os.path.join(config.combined_log_dir, f'{split}_eval.csv'), mode=combined_mode,
     )
     datasets[split]['algo_logger'] = BatchLogger(
-        os.path.join(config.log_dir, f'{split}_algo.csv'), mode=mode,
+        os.path.join(config.combined_log_dir, f'{split}_algo.csv'), mode=combined_mode,
     )
 
   # Logging dataset info
@@ -281,36 +325,45 @@ def main():
   if unlabeled_dataset is not None:
     log_group_data({"unlabeled": unlabeled_dataset}, log_grouper, logger)
 
-  # Initialize algorithm & load pretrained weights if provided
-  algorithm = initialize_algorithm(
-    config=config,
-    datasets=datasets,
-    train_grouper=train_grouper,
-    unlabeled_dataset=unlabeled_dataset,
-  )
-  eval_model_path = os.path.join(
-    config.log_dir,
-    f'camelyon17_erm_densenet121_seed{config.seed_to_use}',
-    'best_model.pth')
-  best_epoch, best_val_metric = load(algorithm, eval_model_path, device=config.device)
-  if config.eval_epoch is None:
-    epoch = best_epoch
-  else:
-    epoch = config.eval_epoch
-  if epoch == best_epoch:
-    is_best = True
-  evaluate(
-    algorithm=algorithm,
-    datasets=datasets,
-    epoch=epoch,
-    general_logger=logger,
-    config=config,
-    is_best=is_best)
+  if config.eval_pred_only: # will load predictions and evaluate them.
+    import ipdb; ipdb.set_trace()
+    evaluate.evaluate_benchmark(
+      config.dataset, config.predictions_dir, config.log_dir, config.root_dir,
+      available_seeds=[config.seed],
+      additional_kwargs=additional_kwargs
+    )
 
-  logger.close()
-  for split in datasets:
-    datasets[split]['eval_logger'].close()
-    datasets[split]['algo_logger'].close()
+  else: # config.eval_only --> will predict then evaluate
+    # Initialize algorithm & load pretrained weights if provided
+    algorithm = initialize_algorithm(
+      config=config,
+      datasets=datasets,
+      train_grouper=train_grouper,
+      unlabeled_dataset=unlabeled_dataset,
+    )
+
+    # Load best model to evaluate.
+    eval_model_path = os.path.join(config.log_dir, 'best_model.pth')
+    # TODO(loganesian): add support for averaging in the load function.
+    best_epoch, best_val_metric = load(algorithm, eval_model_path, device=config.device)
+    if config.eval_epoch is None:
+      epoch = best_epoch
+    else:
+      epoch = config.eval_epoch
+    if epoch == best_epoch:
+      is_best = True
+    train.evaluate(
+      algorithm=algorithm,
+      datasets=datasets,
+      epoch=epoch,
+      general_logger=logger,
+      config=config,
+      is_best=is_best)
+
+    logger.close()
+    for split in datasets:
+      datasets[split]['eval_logger'].close()
+      datasets[split]['algo_logger'].close()
 
 if __name__=='__main__':
   main()

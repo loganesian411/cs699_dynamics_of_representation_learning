@@ -1,5 +1,7 @@
 ## Bayesian Ensembling Modifications
-Copy the file eval_wts.py to wilds/examples/. This will allow the script to actually be run.
+
+1. Copy eval_wts.py to wilds/examples/
+2. Copy evaluate.py to wilds/examples
 
 Recommended run configuration
 ```
@@ -24,9 +26,10 @@ The log_dir should be formatted as such:
 
 ## Using Tent modifications
 
-1. Copy train.py to wilds/examples
-2. Copy initializer.py to wilds/examples/models
-3. Copy single_model_algorithm to wilds/examples/algorithms
+1. Copy run_expt_test.py to wilds/examples/
+2. Copy train.py to wilds/examples
+3. Copy initializer.py to wilds/examples/models
+4. Copy single_model_algorithm to wilds/examples/algorithms
 
 Recommended run configuration
 ```
