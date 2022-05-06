@@ -11,6 +11,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(sys.path[0]), 'tent'))
 import tent
+import norm 
 
 
 def initialize_model(config, d_out, is_featurizer=False):
@@ -161,12 +162,17 @@ def initialize_model(config, d_out, is_featurizer=False):
                 submodel.needs_y = False
         else:
             model.needs_y = False
+
+
     if config.tent_model:
         model = tent.configure_model(model)
         params, param_names = tent.collect_params(model)
-        from optimizer import initialize_optimizer
-        optimizer = initialize_optimizer(config, model)
-        # optimizer = optim.Adam(params, lr=1e-3, betas=(0.9,0.999), weight_decay=0)
+        #from optimizer import initialize_optimizer
+        #optimizer = initialize_optimizer(config, model) #use if you want to optimize over all params
+
+        #optimizer = optim.Adam(params, lr=1e-4, betas=(0.9,0.999), weight_decay=0) #affine scale + shift parameters from batch norms
+
+        optimizer = optim.SGD(params, lr = 1e-5, momentum=0.99) #affine scale + shift parameters from batch norms
         model = tent.Tent(model, optimizer)
 
     return model
