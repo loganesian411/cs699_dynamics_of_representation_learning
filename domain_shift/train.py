@@ -145,21 +145,31 @@ def train(algorithm, datasets, general_logger, config, epoch_offset, best_val_me
 
 
 def evaluate(algorithm, datasets, epoch, general_logger, config, is_best):
-    if not config.tent_model:
-        algorithm.eval()
+    algorithm.eval()
     torch.set_grad_enabled(False)
     for split, dataset in datasets.items():
         if (not config.evaluate_all_splits) and (split not in config.eval_splits):
             continue
         epoch_y_true = []
         epoch_y_pred = []
+        if config.process_outputs_function is not None:
+            epoch_y_raw_pred = []
         epoch_metadata = []
+
+        if split == 'test' and config.tent_model:
+            algorithm.train()
+            torch.set_grad_enabled(True)
+        elif algorithm.is_training:
+            algorithm.eval()
+            torch.set_grad_enabled(False)
+
         iterator = tqdm(dataset['loader']) if config.progress_bar else dataset['loader']
         for batch in iterator:
             batch_results = algorithm.evaluate(batch)
             epoch_y_true.append(detach_and_clone(batch_results['y_true']))
             y_pred = detach_and_clone(batch_results['y_pred'])
             if config.process_outputs_function is not None:
+                epoch_y_raw_pred.append(y_pred)
                 y_pred = process_outputs_functions[config.process_outputs_function](y_pred)
             epoch_y_pred.append(y_pred)
             epoch_metadata.append(detach_and_clone(batch_results['metadata']))
@@ -177,9 +187,15 @@ def evaluate(algorithm, datasets, epoch, general_logger, config, is_best):
         general_logger.write(f'Eval split {split} at epoch {epoch}:\n')
         general_logger.write(results_str)
 
+        additional_save = {} # Default.
+        if config.process_outputs_function is not None:
+            epoch_y_raw_pred = collate_list(epoch_y_raw_pred)
+            additional_save = {'raw_y_pred': epoch_y_raw_pred}
+
         # Skip saving train preds, since the train loader generally shuffles the data
         if split != 'train':
-            save_pred_if_needed(epoch_y_pred, dataset, epoch, config, is_best, force_save=True)
+            save_pred_if_needed(epoch_y_pred, dataset, epoch, config, is_best, force_save=True,
+                additional_save=additional_save)
 
 def infer_predictions(model, loader, config):
     """
@@ -219,7 +235,7 @@ def log_results(algorithm, dataset, general_logger, epoch, effective_batch_idx):
         algorithm.reset_log()
 
 
-def save_pred_if_needed(y_pred, dataset, epoch, config, is_best, force_save=False):
+def save_pred_if_needed(y_pred, dataset, epoch, config, is_best, force_save=False, additional_save={}):
     if config.save_pred:
         prefix = get_pred_prefix(dataset, config)
         if force_save or (config.save_step is not None and (epoch + 1) % config.save_step == 0):
@@ -228,6 +244,9 @@ def save_pred_if_needed(y_pred, dataset, epoch, config, is_best, force_save=Fals
             save_pred(y_pred, prefix + f'epoch:last_pred')
         if config.save_best and is_best:
             save_pred(y_pred, prefix + f'epoch:best_pred')
+        if additional_save:
+            for k, v in additional_save.items():
+                save_pred(v, prefix + f'{k}')
 
 
 def save_model_if_needed(algorithm, dataset, epoch, config, is_best, best_val_metric):
