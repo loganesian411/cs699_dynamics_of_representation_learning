@@ -1,7 +1,8 @@
 ## Bayesian Ensembling Modifications
 
-1. Copy eval_wts.py to wilds/examples/
+1. Copy eval_wts.py to wilds/examples
 2. Copy evaluate.py to wilds/examples
+3. Copy train.py to wilds/examples
 
 Recommended run configuration
 ```

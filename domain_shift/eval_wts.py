@@ -1,9 +1,17 @@
 """
-Recommended way to run this is:
-  python3 examples/eval_wts.py --dataset <datasetname> --algorithm ERM --root_dir <data_dir> \
-    --log_dir <dir_where_all_model_weights_stored> --progress_bar --eval_only --frac 0.25
-"""
+This is a modified version of wilds/examples/run_expt.py that enables running the
+default functionality of run_expt.py but also passing in model weights to evaluate
+on the dataset benchmark directly. This script was modified specifically to
+support running the pre-trained models and evaluating the output of Bayesian model
+ensembling experiments.
 
+Example usage (from WILDS subdirectory):
+  python3 examples/eval_wts.py --dataset <datasetname> --algorithm ERM --root_dir <data_dir> \
+    --pretrained_ERM_dir <directory_where_pretrained_model_lives_as_nested_folders>
+    --combined_log_dir -seed_to_use <seed_of_pretrained_model>
+    --eval_only --frac 0.1 --seed 0 --save_pred  --evaluate_all_splits False
+    --eval_splits val test
+"""
 import os
 import argparse
 import torch
@@ -15,7 +23,6 @@ from wilds.common.grouper import CombinatorialGrouper
 
 import evaluate
 from utils import set_seed, Logger, BatchLogger, log_config, ParseKwargs, load, log_group_data, parse_bool
-# from train import evaluate
 import train
 from algorithms.initializer import initialize_algorithm
 from transforms import initialize_transform
@@ -329,7 +336,8 @@ def main():
     evaluate.evaluate_benchmark(
       config.dataset, config.predictions_dir, config.log_dir, config.root_dir,
       available_seeds=[config.seed],
-      additional_kwargs=additional_kwargs
+      additional_kwargs=additional_kwargs,
+      splits_to_run=config.eval_splits,
     )
 
   else: # config.eval_only --> will predict then evaluate
@@ -343,7 +351,6 @@ def main():
 
     # Load best model to evaluate.
     eval_model_path = os.path.join(config.log_dir, 'best_model.pth')
-    # TODO(loganesian): add support for averaging in the load function.
     best_epoch, best_val_metric = load(algorithm, eval_model_path, device=config.device)
     if config.eval_epoch is None:
       epoch = best_epoch

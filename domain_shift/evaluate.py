@@ -51,7 +51,7 @@ def evaluate_all_benchmarks(predictions_dir: str, output_dir: str, root_dir: str
 
 def evaluate_benchmark(
     dataset_name: str, predictions_dir: str, output_dir: str, root_dir: str,
-    available_seeds: list = [], additional_kwargs: dict = {}
+    available_seeds: list = [], additional_kwargs: dict = {}, splits_to_run: list = [],
 ) -> Dict[str, Dict[str, float]]:
     """
     Evaluate across multiple replicates for a single benchmark.
@@ -123,6 +123,8 @@ def evaluate_benchmark(
     splits: List[str] = list(wilds_dataset.split_dict.keys())
     if "train" in splits:
         splits.remove("train")
+    if splits_to_run:
+        splits = [s for s in splits if s in splits_to_run]
 
     replicates_results: Dict[str, Dict[str, List[float]]] = dict()
     replicates: List[str] = get_replicates(dataset_name, seeds=available_seeds)

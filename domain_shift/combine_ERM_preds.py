@@ -1,5 +1,11 @@
-"""Combine predictions over multiple prediction outputs."""
+"""Perform model ensembling by combining predictions from multiple models.
 
+Currently supports the following ensembling approaches:
+  1) population voting
+  2) unweighted logit averaging
+  3) maximum softmax probability (maxprob) per test prediction weighted logit averaging
+  4) average maxprob over all predictions weighted logit averaging
+"""
 import argparse
 import numpy as np
 import os
@@ -8,19 +14,23 @@ import scipy.stats
 import torch
 import wilds.common.metrics.all_metrics as wilds_metrics
 
-# Even though weights are different seeds, all evaluated on the same ordering
-# of tests so we can population vote on prediction.
-_PRED_FNAME = 'camelyon17_split:test_seed:0_epoch:best_pred.csv'
-_RAW_PRED_FNAME = 'camelyon17_split:{0}_seed:0_raw_y_pred.csv'
+# Even though weights are from different seeds, all were evaluated on the same seed,
+# that is ordering of data, so we can ensemble predictions.
+_PRED_FNAME = 'camelyon17_split:test_seed:0_epoch:best_pred.csv' # categorical predication
+_RAW_PRED_FNAME = 'camelyon17_split:{0}_seed:0_raw_y_pred.csv' # logit predictions
 
 def main():
   """Arg defaults are filled in according to examples/configs/."""
   parser = argparse.ArgumentParser()
-  parser.add_argument('--seeds_to_load', nargs='*', type=int, required=True)
-  parser.add_argument('--pretrained_ERM_dir', type=str, required=True)
-  parser.add_argument('--combined_log_dir', type=str, required=True)
+  parser.add_argument('--seeds_to_load', nargs='*', type=int, required=True,
+                      help='Which seeded models to ensemble.')
+  parser.add_argument('--pretrained_ERM_dir', type=str, required=True,
+                      help='Directory where seeded models live.')
+  parser.add_argument('--combined_log_dir', type=str, required=True,
+                      help='Where to save the combined/ensembled predictions.')
   parser.add_argument('--method', type=str, default='population_vote',
-    choices=['population_vote', 'average', 'wt_ave_maxprob', 'wt_per_maxprob'])
+    choices=['population_vote', 'average', 'wt_ave_maxprob', 'wt_per_maxprob'],
+    help='Ensembling method.')
 
   args = parser.parse_args()
 
